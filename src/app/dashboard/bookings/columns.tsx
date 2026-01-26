@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ColumnDef } from "@tanstack/react-table"
+import { type ColumnDef } from "@tanstack/react-table"
 import { MoreHorizontal, QrCode, Check, DoorOpen, Trash2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
