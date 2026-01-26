@@ -1,3 +1,7 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { collection, onSnapshot } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -8,26 +12,50 @@ import {
 } from "@/components/ui/card"
 import { PlusCircle } from "lucide-react"
 
-import { bookings, guests, rooms } from "@/lib/data"
+import { guests, rooms, type Booking } from "@/lib/data"
 import type { BookingWithDetails } from "./columns"
 import { columns } from "./columns"
 import { DataTable } from "./data-table"
+import { db } from "../../../firebaseConfig"
 
-async function getBookings(): Promise<BookingWithDetails[]> {
-  // In a real app, you would fetch this data from your database
-  return bookings.map((booking) => {
-    const guest = guests.find((g) => g.id === booking.guestId)
-    const room = rooms.find((r) => r.id === booking.roomId)
-    return {
-      ...booking,
-      guest: guest!,
-      room: room!,
-    }
-  }).sort((a, b) => new Date(b.checkInDate).getTime() - new Date(a.checkInDate).getTime());
-}
+export default function BookingsPage() {
+  const [data, setData] = useState<BookingWithDetails[]>([])
 
-export default async function BookingsPage() {
-  const data = await getBookings()
+  useEffect(() => {
+    const bookingsCol = collection(db, "bookings")
+    const unsubscribe = onSnapshot(bookingsCol, (snapshot) => {
+      const bookingsFromDb = snapshot.docs.map((doc) => {
+        const docData = doc.data()
+        return {
+          id: doc.id,
+          guestId: docData.guestId,
+          roomId: docData.roomId,
+          checkInDate: docData.checkInDate,
+          checkOutDate: docData.checkOutDate,
+          status: docData.status,
+        } as Booking
+      })
+
+      const detailedBookings = bookingsFromDb
+        .map((booking) => {
+          const guest = guests.find((g) => g.id === booking.guestId)
+          const room = rooms.find((r) => r.id === booking.roomId)
+          return {
+            ...booking,
+            guest: guest!,
+            room: room!,
+          }
+        })
+        .sort(
+          (a, b) =>
+            new Date(b.checkInDate).getTime() - new Date(a.checkInDate).getTime()
+        )
+
+      setData(detailedBookings)
+    })
+
+    return () => unsubscribe()
+  }, [])
 
   return (
     <Card>
