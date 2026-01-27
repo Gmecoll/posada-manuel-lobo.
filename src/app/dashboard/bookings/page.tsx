@@ -29,7 +29,7 @@ import {
   type NewBookingData,
 } from "@/components/new-booking-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { format } from "date-fns"
+import { format, parse } from "date-fns"
 
 export default function BookingsPage() {
   const [data, setData] = useState<BookingWithDetails[]>([])
@@ -98,30 +98,26 @@ export default function BookingsPage() {
 
   const handleSaveBooking = async (bookingData: NewBookingData) => {
     try {
-      const roomNumberInput = bookingData.roomNumber.trim()
-      const availableRooms = rooms.filter((r) => r.status === "Disponible")
-
-      const matchedRoom = availableRooms.find((room) => {
-        const digits = room.roomNumber.match(/\d+/)
-        return digits ? digits[0] === roomNumberInput : false
-      })
+      const matchedRoom = rooms.find(r => r.id === bookingData.roomId);
 
       if (!matchedRoom) {
         toast({
           variant: "destructive",
-          title: "Habitación no encontrada",
-          description: `No se encontró una habitación disponible con el número ${roomNumberInput}.`,
+          title: "Habitación no disponible",
+          description: `La habitación seleccionada ya no se encuentra disponible.`,
         })
         return
       }
 
+      const checkIn = parse(bookingData.checkInDate, 'dd/MM/yyyy', new Date());
+      const checkOut = parse(bookingData.checkOutDate, 'dd/MM/yyyy', new Date());
       const bookingsCol = collection(db, "bookings")
 
       const bookingToSave = {
         guestName: bookingData.guestName,
-        roomId: matchedRoom.id,
-        checkInDate: format(bookingData.checkInDate, "yyyy-MM-dd"),
-        checkOutDate: format(bookingData.checkOutDate, "yyyy-MM-dd"),
+        roomId: bookingData.roomId,
+        checkInDate: format(checkIn, "yyyy-MM-dd"),
+        checkOutDate: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,
         accessEnabled: bookingData.status === "Checked-In",
       }

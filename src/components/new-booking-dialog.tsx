@@ -1,12 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { format, parse } from "date-fns"
-import { es } from "date-fns/locale"
-import { Calendar as CalendarIcon } from "lucide-react"
+import { parse } from "date-fns"
 
 import {
   Dialog,
@@ -34,30 +32,42 @@ import {
 import { Button } from "@/components/ui/button"
 import type { Room } from "@/lib/data"
 import { Input } from "./ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
-import { cn } from "@/lib/utils"
-import { Calendar } from "./ui/calendar"
 
 const bookingFormSchema = z
   .object({
     guestName: z
       .string()
       .min(1, { message: "El nombre del huésped es requerido." }),
-    roomNumber: z
+    roomId: z.string().min(1, { message: "La habitación es requerida." }),
+    checkInDate: z
       .string()
-      .min(1, { message: "El número de habitación es requerido." }),
-    checkInDate: z.date({
-      required_error: "La fecha de check-in es requerida.",
-    }),
-    checkOutDate: z.date({
-      required_error: "La fecha de check-out es requerida.",
-    }),
+      .regex(
+        /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/,
+        "El formato de fecha debe ser dd/mm/aaaa."
+      ),
+    checkOutDate: z
+      .string()
+      .regex(
+        /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/,
+        "El formato de fecha debe ser dd/mm/aaaa."
+      ),
     status: z.enum(["Confirmed", "Checked-In", "Checked-Out", "Cancelled"]),
   })
-  .refine((data) => data.checkOutDate > data.checkInDate, {
-    message: "La fecha de check-out debe ser posterior a la de check-in.",
-    path: ["checkOutDate"],
-  })
+  .refine(
+    (data) => {
+      try {
+        const checkIn = parse(data.checkInDate, "dd/MM/yyyy", new Date())
+        const checkOut = parse(data.checkOutDate, "dd/MM/yyyy", new Date())
+        return checkOut > checkIn
+      } catch {
+        return false
+      }
+    },
+    {
+      message: "La fecha de check-out debe ser posterior a la de check-in.",
+      path: ["checkOutDate"],
+    }
+  )
 
 export type NewBookingData = z.infer<typeof bookingFormSchema>
 
@@ -74,14 +84,14 @@ export function NewBookingDialog({
   onSave,
   rooms,
 }: NewBookingDialogProps) {
-  const [isCheckInOpen, setIsCheckInOpen] = useState(false)
-  const [isCheckOutOpen, setIsCheckOutOpen] = useState(false)
-
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       status: "Confirmed",
       guestName: "",
+      roomId: "",
+      checkInDate: "",
+      checkOutDate: "",
     },
   })
 
@@ -90,9 +100,9 @@ export function NewBookingDialog({
       form.reset({
         status: "Confirmed",
         guestName: "",
-        roomNumber: "",
-        checkInDate: undefined,
-        checkOutDate: undefined,
+        roomId: "",
+        checkInDate: "",
+        checkOutDate: "",
       })
     }
   }, [isOpen, form])
@@ -131,13 +141,26 @@ export function NewBookingDialog({
 
             <FormField
               control={form.control}
-              name="roomNumber"
+              name="roomId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Número de Habitación</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ej: 4" {...field} />
-                  </FormControl>
+                  <FormLabel>Habitación</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione una habitación disponible" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {rooms
+                        .filter((room) => room.status === "Disponible")
+                        .map((room) => (
+                          <SelectItem key={room.id} value={room.id}>
+                            Habitación {room.roomNumber} ({room.type})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -148,38 +171,11 @@ export function NewBookingDialog({
                 control={form.control}
                 name="checkInDate"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Check-in</FormLabel>
-                    <Popover open={isCheckInOpen} onOpenChange={setIsCheckInOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "dd/MM/yyyy")
-                            ) : (
-                              <span>Elige una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-[9999]" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            field.onChange(date)
-                            setIsCheckInOpen(false)
-                          }}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <FormControl>
+                      <Input placeholder="dd/mm/aaaa" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -188,41 +184,11 @@ export function NewBookingDialog({
                 control={form.control}
                 name="checkOutDate"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Check-out</FormLabel>
-                    <Popover open={isCheckOutOpen} onOpenChange={setIsCheckOutOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "dd/MM/yyyy")
-                            ) : (
-                              <span>Elige una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0 z-[9999]" align="start" onOpenAutoFocus={(e) => e.preventDefault()}>
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            field.onChange(date)
-                            setIsCheckOutOpen(false)
-                          }}
-                          disabled={(date) =>
-                            date < (form.getValues("checkInDate") || new Date())
-                          }
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <FormControl>
+                      <Input placeholder="dd/mm/aaaa" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
