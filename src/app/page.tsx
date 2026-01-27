@@ -41,9 +41,9 @@ export default function GuestLoginPage() {
       const bookingsSnapshot = await getDocs(bookingsRef)
       const allBookings = bookingsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Booking[]
 
-      // Find booking matching guest name (case-insensitive)
+      // Find booking matching guest name (case-insensitive, partial match)
       const matchingBookings = allBookings.filter(
-        (booking) => booking.guestName.toLowerCase().trim() === guestName.toLowerCase().trim()
+        (booking) => booking.guestName.toLowerCase().includes(guestName.toLowerCase().trim())
       )
       
       if (matchingBookings.length === 0) {
