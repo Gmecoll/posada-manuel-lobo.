@@ -1,6 +1,8 @@
 "use client"
 
-import { QrCode } from "lucide-react"
+import * as React from "react"
+import QRCode from "react-qr-code"
+
 import {
   Dialog,
   DialogContent,
@@ -9,6 +11,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import type { Booking, Guest, Room } from "@/lib/data"
+import { Skeleton } from "./ui/skeleton"
 
 type QrCodeDialogProps = {
   isOpen: boolean
@@ -25,6 +28,14 @@ export function QrCodeDialog({
   guest,
   room,
 }: QrCodeDialogProps) {
+  const [accessUrl, setAccessUrl] = React.useState("")
+
+  React.useEffect(() => {
+    if (booking && typeof window !== "undefined") {
+      setAccessUrl(`${window.location.origin}/access/${booking.id}`)
+    }
+  }, [booking])
+
   if (!booking || !guest || !room) return null
 
   return (
@@ -33,16 +44,23 @@ export function QrCodeDialog({
         <DialogHeader>
           <DialogTitle className="font-headline">Código QR de Acceso</DialogTitle>
           <DialogDescription>
-            Escanea este código para desbloquear la puerta de la Habitación {room.roomNumber}.
+            Escanea este código para desbloquear la puerta de la Habitación{" "}
+            {room.roomNumber}.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center justify-center space-y-4 py-8">
-          <div className="rounded-lg border bg-card p-4 shadow-inner">
-            <QrCode className="h-48 w-48 text-primary" />
+          <div className="rounded-lg border bg-white p-4 shadow-inner">
+            {accessUrl ? (
+              <QRCode value={accessUrl} size={192} fgColor="hsl(180 25% 25%)" />
+            ) : (
+              <Skeleton className="h-48 w-48" />
+            )}
           </div>
           <div className="text-center">
             <p className="font-semibold">{guest.name}</p>
-            <p className="text-sm text-muted-foreground">Habitación {room.roomNumber}</p>
+            <p className="text-sm text-muted-foreground">
+              Habitación {room.roomNumber}
+            </p>
           </div>
         </div>
       </DialogContent>
