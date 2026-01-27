@@ -125,7 +125,7 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
             id={`access-switch-${booking.id}`}
             checked={booking.accessEnabled}
             onCheckedChange={handleAccessChange}
-            disabled={booking.status !== "Checked-In"}
+            disabled={!["Confirmed", "Checked-In"].includes(booking.status)}
           />
         </div>
       )
