@@ -65,7 +65,7 @@ export default function BookingsPage() {
         const docData = doc.data()
         return {
           id: doc.id,
-          guestName: docData.guestName,
+          guest_name: docData.guest_name,
           booking_id: docData.booking_id,
           roomId: docData.roomId,
           room_number: docData.room_number,
@@ -234,7 +234,7 @@ export default function BookingsPage() {
       const checkOut = parse(bookingData.checkOutDate, "dd/MM/yyyy", new Date())
 
       const bookingToSave = {
-        guestName: bookingData.guestName,
+        guest_name: bookingData.guest_name,
         booking_id: bookingData.booking_id,
         roomId: bookingData.roomId,
         room_number: matchedRoom.roomNumber,

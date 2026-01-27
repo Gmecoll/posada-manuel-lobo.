@@ -36,7 +36,7 @@ import { Input } from "./ui/input"
 
 const bookingFormSchema = z
   .object({
-    guestName: z.string().min(3, { message: "El nombre es requerido." }),
+    guest_name: z.string().min(3, { message: "El nombre es requerido." }),
     booking_id: z
       .string()
       .min(1, { message: "El ID de Cloudbeds es requerido." }),
@@ -91,7 +91,7 @@ export function NewBookingDialog({
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
-      guestName: "",
+      guest_name: "",
       booking_id: "",
       roomId: "",
       checkInDate: "",
@@ -106,7 +106,7 @@ export function NewBookingDialog({
     if (isOpen) {
       if (isEditing && bookingToEdit) {
         form.reset({
-          guestName: bookingToEdit.guestName,
+          guest_name: bookingToEdit.guest_name,
           booking_id: bookingToEdit.booking_id,
           roomId: bookingToEdit.roomId,
           checkInDate: format(
@@ -121,7 +121,7 @@ export function NewBookingDialog({
         })
       } else {
         form.reset({
-          guestName: "",
+          guest_name: "",
           booking_id: "",
           roomId: "",
           checkInDate: "",
@@ -162,7 +162,7 @@ export function NewBookingDialog({
           >
             <FormField
               control={form.control}
-              name="guestName"
+              name="guest_name"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nombre del Huésped</FormLabel>

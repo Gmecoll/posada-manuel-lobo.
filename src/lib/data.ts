@@ -15,7 +15,7 @@ export type Guest = {
 
 export type Booking = {
   id: string;
-  guestName: string;
+  guest_name: string;
   booking_id: string;
   roomId: string;
   room_number: string;
@@ -51,7 +51,7 @@ export const rooms: Room[] = [
 export const bookings: Booking[] = [
   {
     id: 'booking-1',
-    guestName: 'John Doe',
+    guest_name: 'John Doe',
     booking_id: 'cb12345',
     roomId: 'room-1',
     room_number: '1',
@@ -62,7 +62,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-2',
-    guestName: 'Jane Smith',
+    guest_name: 'Jane Smith',
     booking_id: 'cb12346',
     roomId: 'room-2',
     room_number: '2',
@@ -73,7 +73,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-3',
-    guestName: 'Peter Jones',
+    guest_name: 'Peter Jones',
     booking_id: 'cb12347',
     roomId: 'room-8',
     room_number: '8',
@@ -84,7 +84,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-4',
-    guestName: 'Mary Williams',
+    guest_name: 'Mary Williams',
     booking_id: 'cb12348',
     roomId: 'room-5',
     room_number: '5',
@@ -95,7 +95,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-5',
-    guestName: 'Chris Brown',
+    guest_name: 'Chris Brown',
     booking_id: 'cb12349',
     roomId: 'room-1',
     room_number: '1',
@@ -106,7 +106,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-6',
-    guestName: 'Patricia Green',
+    guest_name: 'Patricia Green',
     booking_id: 'cb12350',
     roomId: 'room-4',
     room_number: '4',

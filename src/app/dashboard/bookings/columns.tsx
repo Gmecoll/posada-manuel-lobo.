@@ -47,10 +47,10 @@ export const getColumns = ({
   onDelete,
 }: GetColumnsProps): ColumnDef<BookingWithDetails>[] => [
   {
-    accessorKey: "guestName",
+    accessorKey: "guest_name",
     header: "Huésped",
     cell: ({ row }) => {
-      return <div className="font-medium">{row.original.guestName}</div>
+      return <div className="font-medium">{row.original.guest_name}</div>
     },
   },
   {
@@ -169,7 +169,7 @@ export const getColumns = ({
               onClick={() => onDelete(booking)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
-              Cancelar Reserva
+              Eliminar Reserva
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
