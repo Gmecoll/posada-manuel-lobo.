@@ -16,7 +16,7 @@ import { guests, rooms, type Booking } from "@/lib/data"
 import type { BookingWithDetails } from "./columns"
 import { columns } from "./columns"
 import { DataTable } from "./data-table"
-import { db } from "../../../firebaseConfig"
+import { db } from "@/firebaseConfig"
 
 export default function BookingsPage() {
   const [data, setData] = useState<BookingWithDetails[]>([])
