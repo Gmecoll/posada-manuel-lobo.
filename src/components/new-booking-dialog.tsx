@@ -100,11 +100,7 @@ export function NewBookingDialog({
   }
 
   return (
-    <Dialog
-      open={isOpen}
-      onOpenChange={onOpenChange}
-      modal={!isCheckInOpen && !isCheckOutOpen}
-    >
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-headline">Nueva Reserva</DialogTitle>
@@ -187,7 +183,11 @@ export function NewBookingDialog({
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent
+                        className="w-auto p-0"
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
                         <Calendar
                           mode="single"
                           selected={field.value}
@@ -195,6 +195,7 @@ export function NewBookingDialog({
                             field.onChange(date)
                             setCheckInOpen(false)
                           }}
+                          disabled={(date) => date < new Date("1900-01-01")}
                         />
                       </PopoverContent>
                     </Popover>
@@ -230,7 +231,11 @@ export function NewBookingDialog({
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent
+                        className="w-auto p-0"
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
                         <Calendar
                           mode="single"
                           selected={field.value}

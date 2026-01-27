@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState } from "react"
@@ -137,13 +138,24 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
       const { toast } = useToast()
       const [isQrDialogOpen, setQrDialogOpen] = useState(false)
 
-      const handleCheckIn = () => {
-        // In a real app, you would call a server action here.
-        console.log("Checking in booking:", booking.id)
-        toast({
-          title: "Check-in Exitoso",
-          description: `${booking.guest.name} ha sido registrado en la Habitación ${booking.room.roomNumber}.`,
-        })
+      const handleCheckIn = async () => {
+        const bookingRef = doc(db, "bookings", booking.id)
+        const roomRef = doc(db, "rooms", booking.roomId)
+        try {
+          await updateDoc(bookingRef, { status: "Checked-In", accessEnabled: true })
+          await updateDoc(roomRef, { status: "Ocupada" })
+          toast({
+            title: "Check-in Exitoso",
+            description: `${booking.guest.name} ha sido registrado en la Habitación ${booking.room.roomNumber}.`,
+          })
+        } catch (error) {
+          console.error("Error during check-in:", error)
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo realizar el check-in.",
+          })
+        }
       }
 
       const handleRemoteOpen = async () => {
