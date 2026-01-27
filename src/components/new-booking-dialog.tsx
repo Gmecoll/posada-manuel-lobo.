@@ -159,7 +159,7 @@ export function NewBookingDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Check-in</FormLabel>
-                    <Popover open={checkInPickerOpen} onOpenChange={setCheckInPickerOpen}>
+                    <Popover modal={true} open={checkInPickerOpen} onOpenChange={setCheckInPickerOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -178,7 +178,11 @@ export function NewBookingDialog({
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent 
+                        className="w-auto p-0" 
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
                         <Calendar
                           mode="single"
                           selected={field.value}
@@ -203,7 +207,7 @@ export function NewBookingDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Check-out</FormLabel>
-                    <Popover open={checkOutPickerOpen} onOpenChange={setCheckOutPickerOpen}>
+                    <Popover modal={true} open={checkOutPickerOpen} onOpenChange={setCheckOutPickerOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -222,7 +226,11 @@ export function NewBookingDialog({
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                      <PopoverContent 
+                        className="w-auto p-0" 
+                        align="start"
+                        onOpenAutoFocus={(e) => e.preventDefault()}
+                      >
                         <Calendar
                           mode="single"
                           selected={field.value}
