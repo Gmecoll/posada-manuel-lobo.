@@ -25,6 +25,7 @@ export default function GuestLoginPage() {
     setIsLoading(true)
     setError(null)
 
+    // Normalize user input
     const searchRoomNumber = roomNumber.trim();
     const searchGuestName = guestName.trim().toLowerCase();
 
@@ -42,25 +43,26 @@ export default function GuestLoginPage() {
       const allBookings = bookingsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Booking[];
 
       let foundBooking: Booking | null = null;
-
+      
       for (const booking of allBookings) {
-        if (!booking.guestName || typeof booking.guestName !== 'string') continue;
+        // Normalize data from DB
+        const bookingGuestName = (booking.guestName || "").trim().toLowerCase();
+        if (!bookingGuestName.includes(searchGuestName)) {
+            continue;
+        }
 
-        const bookingGuestName = booking.guestName.trim().toLowerCase();
-        
-        if (bookingGuestName.includes(searchGuestName)) {
-          const room = allRooms.find((r) => r.id === booking.roomId);
+        const room = allRooms.find((r) => r.id === booking.roomId);
+        if (!room || !room.roomNumber) {
+            continue;
+        }
 
-          if (room) {
-            if (!room.roomNumber) continue;
+        // Extract numbers from room name
+        const roomNumberMatch = String(room.roomNumber).match(/\d+/);
+        const dbRoomNumber = roomNumberMatch ? roomNumberMatch[0] : null;
 
-            const roomNumberMatch = String(room.roomNumber).match(/\d+/);
-            
-            if (roomNumberMatch && roomNumberMatch[0] === searchRoomNumber) {
-              foundBooking = booking;
-              break;
-            }
-          }
+        if (dbRoomNumber === searchRoomNumber) {
+            foundBooking = booking;
+            break;
         }
       }
       
