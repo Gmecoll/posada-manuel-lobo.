@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -140,7 +141,7 @@ export default function Dashboard() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Huésped</TableHead>
+                <TableHead>ID Cloudbeds</TableHead>
                 <TableHead>Habitación</TableHead>
                 <TableHead>Fecha de Check-in</TableHead>
                 <TableHead>Estado</TableHead>
@@ -152,7 +153,7 @@ export default function Dashboard() {
                 return (
                   <TableRow key={booking.id}>
                     <TableCell>
-                      <div className="font-medium">{booking.guestName}</div>
+                      <div className="font-medium">{booking.cloudbedsId}</div>
                     </TableCell>
                     <TableCell>Habitación {room?.roomNumber}</TableCell>
                     <TableCell>{booking.checkInDate}</TableCell>

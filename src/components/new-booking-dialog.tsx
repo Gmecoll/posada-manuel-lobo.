@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useEffect } from "react"
@@ -35,9 +36,9 @@ import { Input } from "./ui/input"
 
 const bookingFormSchema = z
   .object({
-    guestName: z
+    cloudbedsId: z
       .string()
-      .min(1, { message: "El nombre del huésped es requerido." }),
+      .min(1, { message: "El ID de Cloudbeds es requerido." }),
     roomId: z.string().min(1, { message: "La habitación es requerida." }),
     checkInDate: z
       .string()
@@ -88,7 +89,7 @@ export function NewBookingDialog({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       status: "Confirmed",
-      guestName: "",
+      cloudbedsId: "",
       roomId: "",
       checkInDate: "",
       checkOutDate: "",
@@ -99,7 +100,7 @@ export function NewBookingDialog({
     if (!isOpen) {
       form.reset({
         status: "Confirmed",
-        guestName: "",
+        cloudbedsId: "",
         roomId: "",
         checkInDate: "",
         checkOutDate: "",
@@ -127,12 +128,15 @@ export function NewBookingDialog({
           >
             <FormField
               control={form.control}
-              name="guestName"
+              name="cloudbedsId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Huésped</FormLabel>
+                  <FormLabel>ID Cloudbeds</FormLabel>
                   <FormControl>
-                    <Input placeholder="Nombre del huésped" {...field} />
+                    <Input
+                      placeholder="ID de la reserva en Cloudbeds"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

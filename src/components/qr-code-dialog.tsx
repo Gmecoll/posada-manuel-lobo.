@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -10,14 +11,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import type { Booking, Guest, Room } from "@/lib/data"
+import type { Booking, Room } from "@/lib/data"
 import { Skeleton } from "./ui/skeleton"
 
 type QrCodeDialogProps = {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   booking: Booking | null
-  guest: Guest | null
   room: Room | null
 }
 
@@ -25,7 +25,6 @@ export function QrCodeDialog({
   isOpen,
   onOpenChange,
   booking,
-  guest,
   room,
 }: QrCodeDialogProps) {
   const [accessUrl, setAccessUrl] = React.useState("")
@@ -36,7 +35,7 @@ export function QrCodeDialog({
     }
   }, [booking])
 
-  if (!booking || !guest || !room) return null
+  if (!booking || !room) return null
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -57,7 +56,7 @@ export function QrCodeDialog({
             )}
           </div>
           <div className="text-center">
-            <p className="font-semibold">{guest.name}</p>
+            <p className="font-semibold">ID Reserva: {booking.cloudbedsId}</p>
             <p className="text-sm text-muted-foreground">
               Habitación {room.roomNumber}
             </p>

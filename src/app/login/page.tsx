@@ -1,8 +1,9 @@
+
 "use client"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { collection, getDocs } from "firebase/firestore"
+import { collection, getDocs, query, where } from "firebase/firestore"
 import { Building, KeyRound, Loader2 } from "lucide-react"
 
 import { db } from "@/firebaseConfig"
@@ -15,7 +16,7 @@ import type { Booking, Room } from "@/lib/data"
 
 export default function GuestLoginPage() {
   const [roomNumber, setRoomNumber] = useState("")
-  const [guestName, setGuestName] = useState("")
+  const [cloudbedsId, setCloudbedsId] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -25,61 +26,56 @@ export default function GuestLoginPage() {
     setIsLoading(true)
     setError(null)
 
-    // Normalize user input
-    const searchRoomNumber = roomNumber.trim();
-    const searchGuestName = guestName.trim().toLowerCase();
+    const searchRoomNumber = roomNumber.trim()
+    const searchCloudbedsId = cloudbedsId.trim()
 
-    if (!searchRoomNumber || !searchGuestName) {
-      setError("Por favor, ingrese el número de habitación y su nombre.")
+    if (!searchRoomNumber || !searchCloudbedsId) {
+      setError("Por favor, ingrese el número de habitación y su ID de reserva.")
       setIsLoading(false)
       return
     }
 
     try {
-      const roomsSnapshot = await getDocs(collection(db, "rooms"));
-      const allRooms = roomsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Room[];
+      // 1. Find the room by its number
+      const roomsQuery = query(collection(db, "rooms"), where("roomNumber", "==", searchRoomNumber))
+      const roomsSnapshot = await getDocs(roomsQuery)
 
-      const bookingsSnapshot = await getDocs(collection(db, "bookings"));
-      const allBookings = bookingsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Booking[];
-
-      let foundBooking: Booking | null = null;
-      
-      for (const booking of allBookings) {
-        // Normalize data from DB
-        const bookingGuestName = (booking.guestName || "").trim().toLowerCase();
-        if (!bookingGuestName.includes(searchGuestName)) {
-            continue;
-        }
-
-        const room = allRooms.find((r) => r.id === booking.roomId);
-        if (!room || !room.roomNumber) {
-            continue;
-        }
-
-        // Extract numbers from room name
-        const roomNumberMatch = String(room.roomNumber).match(/\d+/);
-        const dbRoomNumber = roomNumberMatch ? roomNumberMatch[0] : null;
-
-        if (dbRoomNumber === searchRoomNumber) {
-            foundBooking = booking;
-            break;
-        }
+      if (roomsSnapshot.empty) {
+        setError("No se encontró la habitación. Verifique que el número sea correcto.")
+        setIsLoading(false)
+        return
       }
       
-      if (foundBooking) {
-        if (foundBooking.accessEnabled && foundBooking.status === "Checked-In") {
-          router.push(`/access/${foundBooking.id}`);
-        } else {
-          setError("El acceso para esta reserva no está habilitado o la reserva no está activa. Contacte con recepción.");
-        }
+      const room = { id: roomsSnapshot.docs[0].id, ...roomsSnapshot.docs[0].data() } as Room
+
+      // 2. Find the booking with the room ID and Cloudbeds ID
+      const bookingsQuery = query(
+        collection(db, "bookings"),
+        where("roomId", "==", room.id),
+        where("cloudbedsId", "==", searchCloudbedsId)
+      )
+      const bookingsSnapshot = await getDocs(bookingsQuery)
+      
+      if (bookingsSnapshot.empty) {
+        setError("No se encontró su reserva. Verifique que el ID de reserva sea correcto.")
+        setIsLoading(false)
+        return
+      }
+
+      const foundBooking = { id: bookingsSnapshot.docs[0].id, ...bookingsSnapshot.docs[0].data() } as Booking
+      
+      // 3. Check access permissions
+      if (foundBooking.accessEnabled && foundBooking.status === "Checked-In") {
+        router.push(`/access/${foundBooking.id}`)
       } else {
-        setError("No se encontró su reserva. Verifique que el nombre y habitación sean correctos.");
+        setError("El acceso para esta reserva no está habilitado o la reserva no está activa. Contacte con recepción.")
       }
+
     } catch (err) {
-      console.error("Error during login verification:", err);
-      setError("Ocurrió un error al verificar su reserva. Intente nuevamente.");
+      console.error("Error during login verification:", err)
+      setError("Ocurrió un error al verificar su reserva. Intente nuevamente.")
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
   }
 
@@ -107,13 +103,13 @@ export default function GuestLoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nombre / Apellido</Label>
+              <Label htmlFor="cloudbedsId" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">ID de Reserva (Cloudbeds)</Label>
               <Input
-                id="name"
+                id="cloudbedsId"
                 type="text"
-                placeholder="Pepe"
-                value={guestName}
-                onChange={(e) => setGuestName(e.target.value)}
+                placeholder="1234567"
+                value={cloudbedsId}
+                onChange={(e) => setCloudbedsId(e.target.value)}
                 required
               />
             </div>

@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -58,10 +59,12 @@ export function DataTable<TData, TValue>({
     <div>
       <div className="flex items-center py-4">
         <Input
-          placeholder="Filter by guest name..."
-          value={(table.getColumn("guest")?.getFilterValue() as string) ?? ""}
+          placeholder="Filtrar por ID Cloudbeds..."
+          value={
+            (table.getColumn("cloudbedsId")?.getFilterValue() as string) ?? ""
+          }
           onChange={(event) =>
-            table.getColumn("guest")?.setFilterValue(event.target.value)
+            table.getColumn("cloudbedsId")?.setFilterValue(event.target.value)
           }
           className="max-w-sm"
         />

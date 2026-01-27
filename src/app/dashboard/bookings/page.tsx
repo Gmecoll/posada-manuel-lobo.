@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/card"
 import { PlusCircle } from "lucide-react"
 
-import type { Room, Guest } from "@/lib/data"
+import type { Room } from "@/lib/data"
 import type { Booking } from "@/lib/data"
 import type { BookingWithDetails } from "./columns"
 import { columns } from "./columns"
@@ -58,7 +59,7 @@ export default function BookingsPage() {
         const docData = doc.data()
         return {
           id: doc.id,
-          guestName: docData.guestName,
+          cloudbedsId: docData.cloudbedsId,
           roomId: docData.roomId,
           checkInDate: docData.checkInDate,
           checkOutDate: docData.checkOutDate,
@@ -73,14 +74,8 @@ export default function BookingsPage() {
           if (!room) {
             return null
           }
-          const guest: Guest = {
-            id: `guest-${booking.id}`,
-            name: booking.guestName,
-            email: "", // email is not available anymore
-          }
           return {
             ...booking,
-            guest,
             room,
           }
         })
@@ -114,7 +109,7 @@ export default function BookingsPage() {
       const bookingsCol = collection(db, "bookings")
 
       const bookingToSave = {
-        guestName: bookingData.guestName,
+        cloudbedsId: bookingData.cloudbedsId,
         roomId: bookingData.roomId,
         checkInDate: format(checkIn, "yyyy-MM-dd"),
         checkOutDate: format(checkOut, "yyyy-MM-dd"),

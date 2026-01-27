@@ -1,3 +1,4 @@
+
 export type Room = {
   id: string;
   roomNumber: string;
@@ -14,7 +15,7 @@ export type Guest = {
 
 export type Booking = {
   id: string;
-  guestName: string;
+  cloudbedsId: string;
   roomId: string;
   checkInDate: string;
   checkOutDate: string;
@@ -48,7 +49,7 @@ export const rooms: Room[] = [
 export const bookings: Booking[] = [
   {
     id: 'booking-1',
-    guestName: 'Alice Johnson',
+    cloudbedsId: 'cb12345',
     roomId: 'room-1',
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString().split('T')[0],
@@ -57,7 +58,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-2',
-    guestName: 'Bob Williams',
+    cloudbedsId: 'cb12346',
     roomId: 'room-2',
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().split('T')[0],
@@ -66,7 +67,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-3',
-    guestName: 'Charlie Brown',
+    cloudbedsId: 'cb12347',
     roomId: 'room-8',
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
@@ -75,7 +76,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-4',
-    guestName: 'Diana Miller',
+    cloudbedsId: 'cb12348',
     roomId: 'room-5',
     checkInDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 4)).toISOString().split('T')[0],
@@ -84,7 +85,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-5',
-    guestName: 'Ethan Davis',
+    cloudbedsId: 'cb12349',
     roomId: 'room-1', // some old booking
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0],
@@ -93,7 +94,7 @@ export const bookings: Booking[] = [
   },
   {
     id: 'booking-6',
-    guestName: 'Fiona Garcia',
+    cloudbedsId: 'cb12350',
     roomId: 'room-4', // old booking
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],

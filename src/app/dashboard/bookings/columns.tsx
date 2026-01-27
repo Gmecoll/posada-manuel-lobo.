@@ -24,30 +24,22 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { QrCodeDialog } from "@/components/qr-code-dialog"
-import type { Booking, Guest, Room } from "@/lib/data"
+import type { Booking, Room } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
 import { Switch } from "@/components/ui/switch"
 import { db } from "@/firebaseConfig"
 
 export type BookingWithDetails = Booking & {
-  guest: Guest
   room: Room
 }
 
 export const columns: ColumnDef<BookingWithDetails>[] = [
   {
-    id: "guest",
-    accessorFn: (row) => row.guest.name,
-    header: "Huésped",
+    accessorKey: "cloudbedsId",
+    header: "ID Cloudbeds",
     cell: ({ row }) => {
-      const guest = row.original.guest
-      if (!guest) {
-        return null
-      }
       return (
-        <div className="font-medium">
-          <div>{guest.name}</div>
-        </div>
+        <div className="font-medium">{row.original.cloudbedsId}</div>
       )
     },
   },
@@ -105,8 +97,8 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
           await updateDoc(bookingRef, { accessEnabled: enabled })
           toast({
             title: "Acceso actualizado",
-            description: `El acceso para ${
-              booking.guest.name
+            description: `El acceso para la reserva ${
+              booking.cloudbedsId
             } ha sido ${enabled ? "habilitado" : "deshabilitado"}.`,
           })
         } catch (error) {
@@ -146,7 +138,7 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
           await updateDoc(roomRef, { status: "Ocupada" })
           toast({
             title: "Check-in Exitoso",
-            description: `${booking.guest.name} ha sido registrado en la Habitación ${booking.room.roomNumber}.`,
+            description: `Check-in para reserva ${booking.cloudbedsId} en Habitación ${booking.room.roomNumber}.`,
           })
         } catch (error) {
           console.error("Error during check-in:", error)
@@ -182,7 +174,6 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
             isOpen={isQrDialogOpen}
             onOpenChange={setQrDialogOpen}
             booking={booking}
-            guest={booking.guest}
             room={booking.room}
           />
           <DropdownMenu>

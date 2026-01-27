@@ -34,7 +34,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
     // Log activity to Firestore
     const activityLogsCol = collection(db, "activity_logs")
     addDoc(activityLogsCol, {
-      message: `${booking.guestName} abrió la puerta de la Habitación ${room.roomNumber}.`,
+      message: `Reserva ${booking.cloudbedsId} abrió la puerta de la Habitación ${room.roomNumber}.`,
       timestamp: serverTimestamp(),
     }).catch((error) => {
       console.error("Error logging activity:", error)
