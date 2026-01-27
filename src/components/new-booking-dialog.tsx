@@ -32,7 +32,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
 import type { Room } from "@/lib/data"
@@ -72,8 +71,9 @@ export function NewBookingDialog({
   onSave,
   rooms,
 }: NewBookingDialogProps) {
-  const [checkInPickerOpen, setCheckInPickerOpen] = useState(false)
-  const [checkOutPickerOpen, setCheckOutPickerOpen] = useState(false)
+  const [showCalendarFor, setShowCalendarFor] = useState<
+    "checkIn" | "checkOut" | null
+  >(null)
 
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingSchema),
@@ -92,11 +92,18 @@ export function NewBookingDialog({
         checkInDate: undefined,
         checkOutDate: undefined,
       })
+      setShowCalendarFor(null)
     }
   }, [isOpen, form])
 
   const onSubmit = (data: NewBookingData) => {
     onSave(data)
+  }
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (!showCalendarFor || !date) return
+    form.setValue(showCalendarFor, date, { shouldValidate: true })
+    setShowCalendarFor(null)
   }
 
   return (
@@ -109,7 +116,10 @@ export function NewBookingDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+          <form
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-4 py-4"
+          >
             <FormField
               control={form.control}
               name="guestName"
@@ -123,7 +133,37 @@ export function NewBookingDialog({
                 </FormItem>
               )}
             />
-            {/* Campo de habitación eliminado temporalmente para depuración */}
+
+            <FormField
+              control={form.control}
+              name="roomId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Habitación</FormLabel>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Seleccione una habitación disponible" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {rooms
+                        .filter((room) => room.status === "Disponible")
+                        .map((room) => (
+                          <SelectItem key={room.id} value={room.id}>
+                            Habitación {room.roomNumber} - {room.type}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -131,43 +171,28 @@ export function NewBookingDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Check-in</FormLabel>
-                    <Popover modal={true} open={checkInPickerOpen} onOpenChange={setCheckInPickerOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: es })
-                            ) : (
-                              <span>Elige una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent 
-                        className="w-auto p-0 z-[9999]" 
-                        align="start"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
+                    <FormControl>
+                      <Button
+                        type="button"
+                        variant={"outline"}
+                        className={cn(
+                          "pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                        onClick={() =>
+                          setShowCalendarFor(
+                            showCalendarFor === "checkIn" ? null : "checkIn"
+                          )
+                        }
                       >
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            field.onChange(date)
-                            setCheckInPickerOpen(false)
-                          }}
-                          disabled={(date) =>
-                            date < new Date(new Date().setHours(0, 0, 0, 0))
-                          }
-                        />
-                      </PopoverContent>
-                    </Popover>
+                        {field.value ? (
+                          format(field.value, "PPP", { locale: es })
+                        ) : (
+                          <span>Elige una fecha</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -178,59 +203,60 @@ export function NewBookingDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Check-out</FormLabel>
-                    <Popover modal={true} open={checkOutPickerOpen} onOpenChange={setCheckOutPickerOpen}>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "PPP", { locale: es })
-                            ) : (
-                              <span>Elige una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent 
-                        className="w-auto p-0 z-[9999]" 
-                        align="start"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
+                    <FormControl>
+                      <Button
+                        type="button"
+                        variant={"outline"}
+                        className={cn(
+                          "pl-3 text-left font-normal",
+                          !field.value && "text-muted-foreground"
+                        )}
+                        onClick={() =>
+                          setShowCalendarFor(
+                            showCalendarFor === "checkOut" ? null : "checkOut"
+                          )
+                        }
                       >
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            field.onChange(date)
-                            setCheckOutPickerOpen(false)
-                          }}
-                          disabled={(date) =>
-                            !form.getValues("checkInDate") ||
-                            date <= form.getValues("checkInDate")
-                          }
-                        />
-                      </PopoverContent>
-                    </Popover>
+                        {field.value ? (
+                          format(field.value, "PPP", { locale: es })
+                        ) : (
+                          <span>Elige una fecha</span>
+                        )}
+                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                      </Button>
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+
+            {showCalendarFor && (
+              <div className="rounded-md border">
+                <Calendar
+                  mode="single"
+                  selected={form.getValues(showCalendarFor)}
+                  onSelect={handleDateSelect}
+                  disabled={
+                    showCalendarFor === "checkIn"
+                      ? (date) =>
+                          date < new Date(new Date().setHours(0, 0, 0, 0))
+                      : (date) =>
+                          !form.getValues("checkInDate") ||
+                          date <= form.getValues("checkInDate")
+                  }
+                  initialFocus
+                />
+              </div>
+            )}
+
             <FormField
               control={form.control}
               name="status"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Estado</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccione un estado" />
