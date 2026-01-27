@@ -2,7 +2,7 @@ export type Room = {
   id: string;
   roomNumber: string;
   type: 'Standard' | 'Deluxe' | 'Suite';
-  isAvailable: boolean;
+  status: 'Disponible' | 'Ocupada' | 'Limpieza';
 };
 
 export type Guest = {
@@ -29,13 +29,18 @@ export const guests: Guest[] = [
   { id: 'guest-6', name: 'Fiona Garcia', email: 'fiona@example.com' },
 ];
 
+// This is now just initial data for populating firestore. The app will read from Firestore.
 export const rooms: Room[] = [
-  { id: 'room-1', roomNumber: '101', type: 'Standard', isAvailable: false },
-  { id: 'room-2', roomNumber: '102', type: 'Deluxe', isAvailable: false },
-  { id: 'room-3', roomNumber: '201', type: 'Suite', isAvailable: false },
-  { id: 'room-4', roomNumber: '202', type: 'Standard', isAvailable: true },
-  { id: 'room-5', roomNumber: '301', type: 'Deluxe', isAvailable: false },
-  { id: 'room-6', roomNumber: '302', type: 'Standard', isAvailable: false },
+  { id: 'room-1', roomNumber: '101', type: 'Standard', status: 'Ocupada' },
+  { id: 'room-2', roomNumber: '102', type: 'Deluxe', status: 'Ocupada' },
+  { id: 'room-3', roomNumber: '103', type: 'Suite', status: 'Limpieza' },
+  { id: 'room-4', roomNumber: '104', type: 'Standard', status: 'Disponible' },
+  { id: 'room-5', roomNumber: '201', type: 'Deluxe', status: 'Ocupada' },
+  { id: 'room-6', roomNumber: '202', type: 'Standard', status: 'Disponible' },
+  { id: 'room-7', roomNumber: '203', type: 'Standard', status: 'Disponible' },
+  { id: 'room-8', roomNumber: '301', type: 'Suite', status: 'Ocupada' },
+  { id: 'room-9', roomNumber: '302', type: 'Deluxe', status: 'Limpieza' },
+  { id: 'room-10', roomNumber: '303', type: 'Standard', status: 'Disponible' },
 ];
 
 export const bookings: Booking[] = [
@@ -58,7 +63,7 @@ export const bookings: Booking[] = [
   {
     id: 'booking-3',
     guestId: 'guest-3',
-    roomId: 'room-3',
+    roomId: 'room-8',
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
     status: 'Confirmed',
@@ -74,7 +79,7 @@ export const bookings: Booking[] = [
   {
     id: 'booking-5',
     guestId: 'guest-5',
-    roomId: 'room-6',
+    roomId: 'room-1', // some old booking
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0],
     status: 'Checked-Out',
@@ -82,7 +87,7 @@ export const bookings: Booking[] = [
   {
     id: 'booking-6',
     guestId: 'guest-6',
-    roomId: 'room-4',
+    roomId: 'room-4', // old booking
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     status: 'Cancelled',

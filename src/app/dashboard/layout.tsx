@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { CalendarDays, Home, Users } from "lucide-react"
+import { CalendarDays, Home, BedDouble } from "lucide-react"
 import {
   SidebarProvider,
   Sidebar,
@@ -54,6 +54,14 @@ export default function DashboardLayout({
                 <Link href="/dashboard/bookings">
                   <CalendarDays />
                   Bookings
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton href="/dashboard/rooms" asChild>
+                <Link href="/dashboard/rooms">
+                  <BedDouble />
+                  Gestión de Habitaciones
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
