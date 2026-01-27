@@ -227,11 +227,11 @@ export default function BookingsPage() {
     try {
       const matchedRoom = rooms.find((r) => r.id === bookingData.roomId)
 
-      if (!matchedRoom) {
+      if (!matchedRoom || !matchedRoom.roomNumber) {
         toast({
           variant: "destructive",
-          title: "Error",
-          description: "La habitación seleccionada no es válida.",
+          title: "Error de Habitación",
+          description: "La habitación seleccionada no es válida o no tiene un número asignado.",
         })
         return
       }
