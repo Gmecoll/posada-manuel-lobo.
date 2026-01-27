@@ -18,16 +18,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { QrCodeDialog } from "@/components/qr-code-dialog"
 import { PlusCircle } from "lucide-react"
 
@@ -49,9 +39,6 @@ export default function BookingsPage() {
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false)
   const [bookingToEdit, setBookingToEdit] =
     useState<BookingWithDetails | null>(null)
-  const [bookingToDelete, setBookingToDelete] =
-    useState<BookingWithDetails | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [qrCodeBooking, setQrCodeBooking] =
     useState<BookingWithDetails | null>(null)
 
@@ -187,41 +174,37 @@ export default function BookingsPage() {
     setIsBookingDialogOpen(true)
   }, [])
 
-  const handleDelete = useCallback((booking: BookingWithDetails) => {
-    setBookingToDelete(booking)
-    setIsDeleteDialogOpen(true)
-  }, [])
+  const handleDelete = useCallback(
+    async (booking: BookingWithDetails) => {
+      if (!booking) return
+
+      const bookingRef = doc(db, "bookings", booking.id)
+      try {
+        if (booking.status === "Checked-In") {
+          const roomRef = doc(db, "rooms", booking.roomId)
+          await updateDoc(roomRef, { status: "Disponible" })
+        }
+
+        await deleteDoc(bookingRef)
+        toast({
+          title: "Reserva Eliminada",
+          description: "La reserva ha sido eliminada exitosamente.",
+        })
+      } catch (error) {
+        console.error("Error deleting booking:", error)
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo eliminar la reserva.",
+        })
+      }
+    },
+    [toast]
+  )
 
   const handleShowQr = useCallback((booking: BookingWithDetails) => {
     setQrCodeBooking(booking)
   }, [])
-
-  const handleConfirmDelete = async () => {
-    if (!bookingToDelete) return
-
-    const bookingRef = doc(db, "bookings", bookingToDelete.id)
-    try {
-      if (bookingToDelete.status === "Checked-In") {
-        const roomRef = doc(db, "rooms", bookingToDelete.roomId)
-        await updateDoc(roomRef, { status: "Disponible" })
-      }
-
-      await deleteDoc(bookingRef)
-      toast({
-        title: "Reserva Eliminada",
-        description: "La reserva ha sido eliminada exitosamente.",
-      })
-    } catch (error) {
-      console.error("Error deleting booking:", error)
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo eliminar la reserva.",
-      })
-    } finally {
-      setIsDeleteDialogOpen(false)
-    }
-  }
 
   const handleSaveBooking = async (bookingData: NewBookingData) => {
     const isEditing = !!bookingToEdit
@@ -332,37 +315,6 @@ export default function BookingsPage() {
         booking={qrCodeBooking}
         room={qrCodeBooking?.room ?? null}
       />
-
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={(open) => {
-          setIsDeleteDialogOpen(open)
-          if (!open) {
-            setBookingToDelete(null)
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer. Se eliminará permanentemente la
-              reserva de{" "}
-              <span className="font-bold">{bookingToDelete?.guestName}</span>{" "}
-              (ID: {bookingToDelete?.booking_id}).
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive hover:bg-destructive/90"
-              onClick={handleConfirmDelete}
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
