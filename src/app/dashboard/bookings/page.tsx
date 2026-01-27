@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
@@ -50,6 +51,7 @@ export default function BookingsPage() {
     useState<BookingWithDetails | null>(null)
   const [bookingToDelete, setBookingToDelete] =
     useState<BookingWithDetails | null>(null)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [qrCodeBooking, setQrCodeBooking] =
     useState<BookingWithDetails | null>(null)
 
@@ -187,6 +189,7 @@ export default function BookingsPage() {
 
   const handleDelete = useCallback((booking: BookingWithDetails) => {
     setBookingToDelete(booking)
+    setIsDeleteDialogOpen(true)
   }, [])
 
   const handleShowQr = useCallback((booking: BookingWithDetails) => {
@@ -216,7 +219,7 @@ export default function BookingsPage() {
         description: "No se pudo eliminar la reserva.",
       })
     } finally {
-      setBookingToDelete(null)
+      setIsDeleteDialogOpen(false)
     }
   }
 
@@ -331,8 +334,9 @@ export default function BookingsPage() {
       />
 
       <AlertDialog
-        open={!!bookingToDelete}
+        open={isDeleteDialogOpen}
         onOpenChange={(open) => {
+          setIsDeleteDialogOpen(open)
           if (!open) {
             setBookingToDelete(null)
           }
