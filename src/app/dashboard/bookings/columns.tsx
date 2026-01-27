@@ -54,10 +54,10 @@ export const getColumns = ({
     },
   },
   {
-    accessorKey: "cloudbedsId",
+    accessorKey: "booking_id",
     header: "ID Cloudbeds",
     cell: ({ row }) => {
-      return <div className="font-medium">{row.original.cloudbedsId}</div>
+      return <div className="font-medium">{row.original.booking_id}</div>
     },
   },
   {

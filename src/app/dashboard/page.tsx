@@ -153,7 +153,7 @@ export default function Dashboard() {
                 return (
                   <TableRow key={booking.id}>
                     <TableCell>
-                      <div className="font-medium">{booking.cloudbedsId}</div>
+                      <div className="font-medium">{booking.booking_id}</div>
                     </TableCell>
                     <TableCell>Habitación {room?.roomNumber}</TableCell>
                     <TableCell>{booking.checkInDate}</TableCell>

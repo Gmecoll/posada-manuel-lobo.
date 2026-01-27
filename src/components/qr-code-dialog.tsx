@@ -56,7 +56,7 @@ export function QrCodeDialog({
             )}
           </div>
           <div className="text-center">
-            <p className="font-semibold">ID Reserva: {booking.cloudbedsId}</p>
+            <p className="font-semibold">ID Reserva: {booking.booking_id}</p>
             <p className="text-sm text-muted-foreground">
               Habitación {room.roomNumber}
             </p>

@@ -78,7 +78,7 @@ export default function BookingsPage() {
         return {
           id: doc.id,
           guestName: docData.guestName,
-          cloudbedsId: docData.cloudbedsId,
+          booking_id: docData.booking_id,
           roomId: docData.roomId,
           checkInDate: docData.checkInDate,
           checkOutDate: docData.checkOutDate,
@@ -118,7 +118,7 @@ export default function BookingsPage() {
         toast({
           title: "Acceso actualizado",
           description: `El acceso para la reserva ${
-            booking.cloudbedsId
+            booking.booking_id
           } ha sido ${enabled ? "habilitado" : "deshabilitado"}.`,
         })
       } catch (error) {
@@ -145,7 +145,7 @@ export default function BookingsPage() {
         await updateDoc(roomRef, { status: "Ocupada" })
         toast({
           title: "Check-in Exitoso",
-          description: `Check-in para reserva ${booking.cloudbedsId} en Habitación ${booking.room.roomNumber}.`,
+          description: `Check-in para reserva ${booking.booking_id} en Habitación ${booking.room.roomNumber}.`,
         })
       } catch (error) {
         console.error("Error during check-in:", error)
@@ -240,7 +240,7 @@ export default function BookingsPage() {
 
       const bookingToSave = {
         guestName: bookingData.guestName,
-        cloudbedsId: bookingData.cloudbedsId,
+        booking_id: bookingData.booking_id,
         roomId: bookingData.roomId,
         checkInDate: format(checkIn, "yyyy-MM-dd"),
         checkOutDate: format(checkOut, "yyyy-MM-dd"),
@@ -331,7 +331,7 @@ export default function BookingsPage() {
               Esta acción no se puede deshacer. Se eliminará permanentemente la
               reserva de{" "}
               <span className="font-bold">{bookingToDelete?.guestName}</span>{" "}
-              (ID: {bookingToDelete?.cloudbedsId}).
+              (ID: {bookingToDelete?.booking_id}).
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

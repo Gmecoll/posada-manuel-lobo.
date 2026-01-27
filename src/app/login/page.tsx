@@ -16,7 +16,7 @@ import type { Booking, Room } from "@/lib/data"
 
 export default function GuestLoginPage() {
   const [roomNumber, setRoomNumber] = useState("")
-  const [cloudbedsId, setCloudbedsId] = useState("")
+  const [booking_id, setBookingId] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -27,9 +27,9 @@ export default function GuestLoginPage() {
     setError(null)
 
     const searchRoomNumber = roomNumber.trim()
-    const searchCloudbedsId = cloudbedsId.trim()
+    const searchBookingId = booking_id.trim()
 
-    if (!searchRoomNumber || !searchCloudbedsId) {
+    if (!searchRoomNumber || !searchBookingId) {
       setError("Por favor, ingrese el número de habitación y su ID de reserva.")
       setIsLoading(false)
       return
@@ -52,7 +52,7 @@ export default function GuestLoginPage() {
       const bookingsQuery = query(
         collection(db, "bookings"),
         where("roomId", "==", room.id),
-        where("cloudbedsId", "==", searchCloudbedsId)
+        where("booking_id", "==", searchBookingId)
       )
       const bookingsSnapshot = await getDocs(bookingsQuery)
       
@@ -103,13 +103,13 @@ export default function GuestLoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cloudbedsId" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">ID de Reserva (Cloudbeds)</Label>
+              <Label htmlFor="booking_id" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Número de Reserva (Cloudbeds)</Label>
               <Input
-                id="cloudbedsId"
+                id="booking_id"
                 type="text"
                 placeholder="1234567"
-                value={cloudbedsId}
-                onChange={(e) => setCloudbedsId(e.target.value)}
+                value={booking_id}
+                onChange={(e) => setBookingId(e.target.value)}
                 required
               />
             </div>

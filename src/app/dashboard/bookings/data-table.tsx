@@ -61,10 +61,10 @@ export function DataTable<TData, TValue>({
         <Input
           placeholder="Filtrar por ID Cloudbeds..."
           value={
-            (table.getColumn("cloudbedsId")?.getFilterValue() as string) ?? ""
+            (table.getColumn("booking_id")?.getFilterValue() as string) ?? ""
           }
           onChange={(event) =>
-            table.getColumn("cloudbedsId")?.setFilterValue(event.target.value)
+            table.getColumn("booking_id")?.setFilterValue(event.target.value)
           }
           className="max-w-sm"
         />

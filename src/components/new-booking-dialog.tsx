@@ -37,7 +37,7 @@ import { Input } from "./ui/input"
 const bookingFormSchema = z
   .object({
     guestName: z.string().min(3, { message: "El nombre es requerido." }),
-    cloudbedsId: z
+    booking_id: z
       .string()
       .min(1, { message: "El ID de Cloudbeds es requerido." }),
     roomId: z.string().min(1, { message: "La habitación es requerida." }),
@@ -92,7 +92,7 @@ export function NewBookingDialog({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       guestName: "",
-      cloudbedsId: "",
+      booking_id: "",
       roomId: "",
       checkInDate: "",
       checkOutDate: "",
@@ -107,7 +107,7 @@ export function NewBookingDialog({
       if (isEditing && bookingToEdit) {
         form.reset({
           guestName: bookingToEdit.guestName,
-          cloudbedsId: bookingToEdit.cloudbedsId,
+          booking_id: bookingToEdit.booking_id,
           roomId: bookingToEdit.roomId,
           checkInDate: format(
             parse(bookingToEdit.checkInDate, "yyyy-MM-dd", new Date()),
@@ -122,7 +122,7 @@ export function NewBookingDialog({
       } else {
         form.reset({
           guestName: "",
-          cloudbedsId: "",
+          booking_id: "",
           roomId: "",
           checkInDate: "",
           checkOutDate: "",
@@ -176,10 +176,10 @@ export function NewBookingDialog({
 
             <FormField
               control={form.control}
-              name="cloudbedsId"
+              name="booking_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>ID Cloudbeds</FormLabel>
+                  <FormLabel>Número de Reserva (Cloudbeds)</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="ID de la reserva en Cloudbeds"
