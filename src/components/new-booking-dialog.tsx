@@ -100,7 +100,11 @@ export function NewBookingDialog({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={onOpenChange}
+      modal={!isCheckInOpen && !isCheckOutOpen}
+    >
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="font-headline">Nueva Reserva</DialogTitle>
