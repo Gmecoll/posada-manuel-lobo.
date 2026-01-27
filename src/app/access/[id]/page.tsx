@@ -25,12 +25,12 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
       </div>
       <div className="w-full max-w-md text-center">
         <h1 className="font-headline text-3xl md:text-4xl">
-          Room <span className="text-primary">{roomNumber}</span>
+          Habitación <span className="text-primary">{roomNumber}</span>
         </h1>
         <p className="mt-2 text-muted-foreground">
           {isUnlocked
-            ? "Welcome! The door is now unlocked."
-            : "Tap to scan your QR code and unlock the door."}
+            ? "¡Bienvenido! La puerta está desbloqueada."
+            : "Escanea tu código QR para desbloquear la puerta."}
         </p>
 
         <div className="relative mt-12 flex h-80 w-full items-center justify-center">
@@ -43,7 +43,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
           >
             <CheckCircle2 className="h-24 w-24 text-green-600" />
             <span className="text-2xl font-semibold text-green-700">
-              Access Granted
+              Acceso Concedido
             </span>
           </div>
 
@@ -57,11 +57,11 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
               variant="default"
               className="h-48 w-48 rounded-full shadow-lg"
               onClick={handleUnlock}
-              aria-label="Scan QR Code to Unlock"
+              aria-label="Escanear QR para Desbloquear"
             >
               <div className="flex flex-col items-center gap-2">
                 <QrCode className="h-16 w-16" />
-                <span className="text-lg font-semibold">Scan to Unlock</span>
+                <span className="text-lg font-semibold">Escanear</span>
               </div>
             </Button>
           </div>

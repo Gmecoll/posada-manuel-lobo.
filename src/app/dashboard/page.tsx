@@ -101,7 +101,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{checkedInCount}</div>
             <p className="text-xs text-muted-foreground">
-              Actualmente en el hotel
+              Actualmente en la posada
             </p>
           </CardContent>
         </Card>
@@ -119,7 +119,7 @@ export default function Dashboard() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Actividad</CardTitle>
+            <CardTitle className="text-sm font-medium">Actividad Reciente</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>

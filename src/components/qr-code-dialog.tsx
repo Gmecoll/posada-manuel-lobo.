@@ -31,9 +31,9 @@ export function QrCodeDialog({
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-headline">Room Access QR Code</DialogTitle>
+          <DialogTitle className="font-headline">Código QR de Acceso</DialogTitle>
           <DialogDescription>
-            Scan this code to unlock the door for Room {room.roomNumber}.
+            Escanea este código para desbloquear la puerta de la Habitación {room.roomNumber}.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center justify-center space-y-4 py-8">
@@ -42,7 +42,7 @@ export function QrCodeDialog({
           </div>
           <div className="text-center">
             <p className="font-semibold">{guest.name}</p>
-            <p className="text-sm text-muted-foreground">Room {room.roomNumber}</p>
+            <p className="text-sm text-muted-foreground">Habitación {room.roomNumber}</p>
           </div>
         </div>
       </DialogContent>

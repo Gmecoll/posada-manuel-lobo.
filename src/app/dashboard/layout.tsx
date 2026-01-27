@@ -45,7 +45,7 @@ export default function DashboardLayout({
               <SidebarMenuButton href="/dashboard" asChild>
                 <Link href="/dashboard">
                   <Home />
-                  Dashboard
+                  Panel de Control
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -53,7 +53,7 @@ export default function DashboardLayout({
               <SidebarMenuButton href="/dashboard/bookings" asChild>
                 <Link href="/dashboard/bookings">
                   <CalendarDays />
-                  Bookings
+                  Reservas
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
@@ -90,16 +90,16 @@ export default function DashboardLayout({
                       data-ai-hint={userAvatar.imageHint}
                     />
                   )}
-                  <AvatarFallback>JD</AvatarFallback>
+                  <AvatarFallback>ML</AvatarFallback>
                 </Avatar>
                 <span className="sr-only">Toggle user menu</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>My Account</DropdownMenuLabel>
+              <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>Settings</DropdownMenuItem>
-              <DropdownMenuItem>Support</DropdownMenuItem>
+              <DropdownMenuItem>Ajustes</DropdownMenuItem>
+              <DropdownMenuItem>Soporte</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </header>

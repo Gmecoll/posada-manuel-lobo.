@@ -26,9 +26,12 @@ export type BookingWithDetails = Booking & {
 export const columns: ColumnDef<BookingWithDetails>[] = [
   {
     accessorKey: "guest",
-    header: "Guest",
+    header: "Huésped",
     cell: ({ row }) => {
       const guest = row.original.guest
+      if (!guest) {
+        return null;
+      }
       return (
         <div className="font-medium">
           <div>{guest.name}</div>
@@ -39,7 +42,7 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
   },
   {
     accessorKey: "room",
-    header: "Room",
+    header: "Habitación",
     cell: ({ row }) => {
       const room = row.original.room
       return (
@@ -52,7 +55,7 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
   },
   {
     accessorKey: "checkInDate",
-    header: "Dates",
+    header: "Fechas",
     cell: ({ row }) => {
       return (
         <div>
@@ -64,7 +67,7 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
   },
   {
     accessorKey: "status",
-    header: "Status",
+    header: "Estado",
     cell: ({ row }) => {
       const status = row.original.status
       const variant: "default" | "secondary" | "destructive" | "outline" =
@@ -89,8 +92,8 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
         // In a real app, you would call a server action here.
         console.log("Checking in booking:", booking.id);
         toast({
-          title: "Check-in Successful",
-          description: `${booking.guest.name} has been checked in to Room ${booking.room.roomNumber}.`,
+          title: "Check-in Exitoso",
+          description: `${booking.guest.name} ha sido registrado en la Habitación ${booking.room.roomNumber}.`,
         });
       };
 
@@ -106,34 +109,34 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
+                <span className="sr-only">Abrir menú</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
               {booking.status === "Confirmed" && (
                 <DropdownMenuItem onClick={handleCheckIn}>
                   <Check className="mr-2 h-4 w-4" />
-                  Check-in
+                  Registrar Entrada
                 </DropdownMenuItem>
               )}
               {booking.status === "Checked-In" && (
                 <>
                   <DropdownMenuItem onClick={() => setQrDialogOpen(true)}>
                     <QrCode className="mr-2 h-4 w-4" />
-                    Generate QR Code
+                    Generar Código QR
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <DoorOpen className="mr-2 h-4 w-4" />
-                    Check-out
+                    Registrar Salida
                   </DropdownMenuItem>
                 </>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-destructive">
                 <Trash2 className="mr-2 h-4 w-4" />
-                Cancel Booking
+                Cancelar Reserva
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

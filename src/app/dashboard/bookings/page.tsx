@@ -80,14 +80,14 @@ export default function BookingsPage() {
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
-          <CardTitle className="font-headline">Bookings</CardTitle>
+          <CardTitle className="font-headline">Reservas</CardTitle>
           <CardDescription>
-            Manage guest bookings and room assignments.
+            Gestiona las reservas de los huéspedes y la asignación de habitaciones.
           </CardDescription>
         </div>
         <Button size="sm">
           <PlusCircle className="mr-2 h-4 w-4" />
-          New Booking
+          Nueva Reserva
         </Button>
       </CardHeader>
       <CardContent>
