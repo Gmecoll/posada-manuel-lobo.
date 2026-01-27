@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card"
 import { PlusCircle } from "lucide-react"
 
-import { guests, rooms, type Booking } from "@/lib/data"
+import { guests, type Room, type Booking } from "@/lib/data"
 import type { BookingWithDetails } from "./columns"
 import { columns } from "./columns"
 import { DataTable } from "./data-table"
@@ -20,8 +20,23 @@ import { db } from "@/firebaseConfig"
 
 export default function BookingsPage() {
   const [data, setData] = useState<BookingWithDetails[]>([])
+  const [rooms, setRooms] = useState<Room[]>([])
 
   useEffect(() => {
+    const roomsCol = collection(db, "rooms")
+    const unsubscribe = onSnapshot(roomsCol, (snapshot) => {
+      const roomsFromDb = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as Room[]
+      setRooms(roomsFromDb)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (rooms.length === 0) return
+
     const bookingsCol = collection(db, "bookings")
     const unsubscribe = onSnapshot(bookingsCol, (snapshot) => {
       const bookingsFromDb = snapshot.docs.map((doc) => {
@@ -40,12 +55,16 @@ export default function BookingsPage() {
         .map((booking) => {
           const guest = guests.find((g) => g.id === booking.guestId)
           const room = rooms.find((r) => r.id === booking.roomId)
+          if (!guest || !room) {
+            return null
+          }
           return {
             ...booking,
-            guest: guest!,
-            room: room!,
+            guest,
+            room,
           }
         })
+        .filter((b): b is BookingWithDetails => b !== null)
         .sort(
           (a, b) =>
             new Date(b.checkInDate).getTime() - new Date(a.checkInDate).getTime()
@@ -55,7 +74,7 @@ export default function BookingsPage() {
     })
 
     return () => unsubscribe()
-  }, [])
+  }, [rooms])
 
   return (
     <Card>
