@@ -1,10 +1,12 @@
+
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { format } from "date-fns"
+import { CalendarIcon } from "lucide-react"
 
 import {
   Dialog,
@@ -32,6 +34,9 @@ import {
 import { Button } from "@/components/ui/button"
 import type { Room } from "@/lib/data"
 import { Input } from "./ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
+import { cn } from "@/lib/utils"
+import { Calendar } from "./ui/calendar"
 
 const bookingSchema = z
   .object({
@@ -67,6 +72,9 @@ export function NewBookingDialog({
   onSave,
   rooms,
 }: NewBookingDialogProps) {
+  const [isCheckInOpen, setCheckInOpen] = useState(false)
+  const [isCheckOutOpen, setCheckOutOpen] = useState(false)
+
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
@@ -151,26 +159,41 @@ export function NewBookingDialog({
                 control={form.control}
                 name="checkInDate"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Check-in</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="date"
-                        value={
-                          field.value ? format(field.value, "yyyy-MM-dd") : ""
-                        }
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value
-                              ? new Date(`${e.target.value}T00:00:00`)
-                              : null
-                          )
-                        }
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
-                      />
-                    </FormControl>
+                    <Popover
+                      open={isCheckInOpen}
+                      onOpenChange={setCheckInOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy")
+                            ) : (
+                              <span>Elige una fecha</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={(date) => {
+                            field.onChange(date)
+                            setCheckInOpen(false)
+                          }}
+                        />
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -179,40 +202,44 @@ export function NewBookingDialog({
                 control={form.control}
                 name="checkOutDate"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="flex flex-col">
                     <FormLabel>Check-out</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="date"
-                        value={
-                          field.value ? format(field.value, "yyyy-MM-dd") : ""
-                        }
-                        onChange={(e) =>
-                          field.onChange(
-                            e.target.value
-                              ? new Date(`${e.target.value}T00:00:00`)
-                              : null
-                          )
-                        }
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
-                        min={
-                          form.watch("checkInDate")
-                            ? format(
-                                new Date(
-                                  form
-                                    .watch("checkInDate")
-                                    .setDate(
-                                      form.watch("checkInDate").getDate() + 1
-                                    )
-                                ),
-                                "yyyy-MM-dd"
-                              )
-                            : ""
-                        }
-                      />
-                    </FormControl>
+                    <Popover
+                      open={isCheckOutOpen}
+                      onOpenChange={setCheckOutOpen}
+                    >
+                      <PopoverTrigger asChild>
+                        <FormControl>
+                          <Button
+                            variant={"outline"}
+                            className={cn(
+                              "w-full pl-3 text-left font-normal",
+                              !field.value && "text-muted-foreground"
+                            )}
+                          >
+                            {field.value ? (
+                              format(field.value, "dd/MM/yyyy")
+                            ) : (
+                              <span>Elige una fecha</span>
+                            )}
+                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                          </Button>
+                        </FormControl>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          mode="single"
+                          selected={field.value}
+                          onSelect={(date) => {
+                            field.onChange(date)
+                            setCheckOutOpen(false)
+                          }}
+                          disabled={(date) =>
+                            date <= (form.watch("checkInDate") || new Date(0))
+                          }
+                        />
+                      </PopoverContent>
+                    </Popover>
                     <FormMessage />
                   </FormItem>
                 )}
