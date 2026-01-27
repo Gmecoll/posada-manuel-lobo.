@@ -24,6 +24,7 @@ import { rooms as initialRooms } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { RefreshCw } from "lucide-react"
 
 type RoomStatus = "Disponible" | "Ocupada" | "Limpieza"
 
@@ -40,11 +41,6 @@ export default function RoomsPage() {
   useEffect(() => {
     const roomsCol = collection(db, "rooms")
     const unsubscribe = onSnapshot(roomsCol, (snapshot) => {
-      if (snapshot.empty) {
-        console.log("La colección de 'rooms' está vacía.")
-        setRooms([])
-        return
-      }
       const roomsFromDb = snapshot.docs
         .map((doc) => ({
           id: doc.id,
@@ -92,7 +88,7 @@ export default function RoomsPage() {
       await batch.commit()
       toast({
         title: "Base de datos inicializada",
-        description: `Se han agregado ${initialRooms.length} habitaciones a Firestore.`,
+        description: `Se han agregado/actualizado ${initialRooms.length} habitaciones.`,
       })
     } catch (error) {
       console.error("Error seeding database: ", error)
@@ -107,11 +103,17 @@ export default function RoomsPage() {
   return (
     <div className="flex flex-col gap-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Gestión de Habitaciones</CardTitle>
-          <CardDescription>
-            Visualiza y actualiza el estado de cada habitación en tiempo real.
-          </CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="font-headline">Gestión de Habitaciones</CardTitle>
+            <CardDescription>
+              Visualiza y actualiza el estado de cada habitación en tiempo real.
+            </CardDescription>
+          </div>
+           <Button onClick={seedDatabase} variant="outline">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Inicializar/Reinicializar Datos
+          </Button>
         </CardHeader>
       </Card>
 
@@ -119,12 +121,11 @@ export default function RoomsPage() {
         <Card>
           <CardContent className="pt-6 text-center">
             <p className="mb-4 text-muted-foreground">
-              No se encontraron habitaciones en la base de datos.
+              No se encontraron habitaciones en la base de datos o se están cargando.
             </p>
             <p className="mb-4 text-sm text-muted-foreground">
-              ¿Quieres agregar los datos de ejemplo para empezar?
+              Si la base de datos está vacía, puedes usar el botón de arriba para inicializarla con datos de ejemplo.
             </p>
-            <Button onClick={seedDatabase}>Inicializar Habitaciones</Button>
           </CardContent>
         </Card>
       ) : (
