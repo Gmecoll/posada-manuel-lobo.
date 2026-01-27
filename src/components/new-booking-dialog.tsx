@@ -193,7 +193,6 @@ export function NewBookingDialog({
                           disabled={(date) =>
                             date < new Date(new Date().setHours(0, 0, 0, 0))
                           }
-                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
@@ -242,7 +241,6 @@ export function NewBookingDialog({
                             !form.getValues("checkInDate") ||
                             date <= form.getValues("checkInDate")
                           }
-                          initialFocus
                         />
                       </PopoverContent>
                     </Popover>
