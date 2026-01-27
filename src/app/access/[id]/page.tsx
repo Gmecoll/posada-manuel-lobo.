@@ -1,7 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { doc, onSnapshot, updateDoc } from "firebase/firestore"
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  collection,
+  addDoc,
+  serverTimestamp,
+} from "firebase/firestore"
 import { CheckCircle2, QrCode, ShieldOff } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -18,8 +25,20 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
   const [isLoading, setIsLoading] = useState(true)
 
   const handleUnlock = () => {
+    if (!booking || !room) return
+
     setIsUnlocked(true)
     setTimeout(() => setIsUnlocked(false), 4000) // Reset after 4 seconds
+
+    // Log activity to Firestore
+    const activityLogsCol = collection(db, "activity_logs")
+    addDoc(activityLogsCol, {
+      message: `${booking.guestName} abrió la puerta de la Habitación ${room.roomNumber}.`,
+      timestamp: serverTimestamp(),
+    }).catch((error) => {
+      console.error("Error logging activity:", error)
+      // This is a background task, so we won't show an error to the user
+    })
   }
 
   // Listen to booking changes
