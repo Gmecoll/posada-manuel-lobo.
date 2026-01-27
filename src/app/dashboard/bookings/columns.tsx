@@ -102,7 +102,7 @@ export const getColumns = ({
     },
   },
   {
-    accessorKey: "accessEnabled",
+    accessorKey: "access_enabled",
     header: "Acceso",
     cell: ({ row }) => {
       const booking = row.original
@@ -114,7 +114,7 @@ export const getColumns = ({
         <div className="flex items-center space-x-2">
           <Switch
             id={`access-switch-${booking.id}`}
-            checked={booking.accessEnabled}
+            checked={booking.access_enabled}
             onCheckedChange={handleAccessChange}
             disabled={!["Confirmed", "Checked-In"].includes(booking.status)}
           />

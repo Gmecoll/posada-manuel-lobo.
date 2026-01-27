@@ -63,7 +63,7 @@ export default function GuestLoginPage() {
         ...bookingsSnapshot.docs[0].data(),
       } as Booking
 
-      if (foundBooking.accessEnabled && foundBooking.status === "Checked-In") {
+      if (foundBooking.access_enabled && foundBooking.status === "Checked-In") {
         router.push(`/access/${foundBooking.id}`)
       } else {
         setError(

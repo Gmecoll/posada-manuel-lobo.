@@ -72,7 +72,7 @@ export default function BookingsPage() {
           checkInDate: docData.checkInDate,
           checkOutDate: docData.checkOutDate,
           status: docData.status,
-          accessEnabled: docData.accessEnabled,
+          access_enabled: docData.access_enabled,
         } as Booking
       })
 
@@ -103,7 +103,7 @@ export default function BookingsPage() {
     async (booking: BookingWithDetails, enabled: boolean) => {
       const bookingRef = doc(db, "bookings", booking.id)
       try {
-        await updateDoc(bookingRef, { accessEnabled: enabled })
+        await updateDoc(bookingRef, { access_enabled: enabled })
         toast({
           title: "Acceso actualizado",
           description: `El acceso para la reserva ${
@@ -129,7 +129,7 @@ export default function BookingsPage() {
       try {
         await updateDoc(bookingRef, {
           status: "Checked-In",
-          accessEnabled: true,
+          access_enabled: true,
         })
         await updateDoc(roomRef, { status: "Ocupada" })
         toast({
@@ -241,7 +241,7 @@ export default function BookingsPage() {
         checkInDate: format(checkIn, "yyyy-MM-dd"),
         checkOutDate: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,
-        accessEnabled: bookingData.status === "Checked-In",
+        access_enabled: bookingData.status === "Checked-In",
       }
 
       if (isEditing && bookingToEdit) {

@@ -112,7 +112,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
   }
 
   const accessDeniedByStatus =
-    !booking.accessEnabled || booking.status !== "Checked-In"
+    !booking.access_enabled || booking.status !== "Checked-In"
 
   // Date validation logic
   const now = new Date()

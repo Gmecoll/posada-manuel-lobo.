@@ -22,7 +22,7 @@ export type Booking = {
   checkInDate: string;
   checkOutDate: string;
   status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled';
-  accessEnabled: boolean;
+  access_enabled: boolean;
 };
 
 export const guests: Guest[] = [
@@ -58,7 +58,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString().split('T')[0],
     status: 'Checked-In',
-    accessEnabled: true,
+    access_enabled: true,
   },
   {
     id: 'booking-2',
@@ -69,7 +69,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().split('T')[0],
     status: 'Confirmed',
-    accessEnabled: false,
+    access_enabled: false,
   },
   {
     id: 'booking-3',
@@ -80,7 +80,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
     status: 'Confirmed',
-    accessEnabled: true,
+    access_enabled: true,
   },
   {
     id: 'booking-4',
@@ -91,7 +91,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 4)).toISOString().split('T')[0],
     status: 'Confirmed',
-    accessEnabled: false,
+    access_enabled: false,
   },
   {
     id: 'booking-5',
@@ -102,7 +102,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0],
     status: 'Checked-Out',
-    accessEnabled: false,
+    access_enabled: false,
   },
   {
     id: 'booking-6',
@@ -113,6 +113,6 @@ export const bookings: Booking[] = [
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     status: 'Cancelled',
-    accessEnabled: false,
+    access_enabled: false,
   },
 ];
