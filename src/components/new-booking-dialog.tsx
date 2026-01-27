@@ -159,7 +159,7 @@ export function NewBookingDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Check-in</FormLabel>
-                    <Popover open={checkInPickerOpen} onOpenChange={setCheckInPickerOpen}>
+                    <Popover open={checkInPickerOpen} onOpenChange={setCheckInPickerOpen} modal={false}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -203,7 +203,7 @@ export function NewBookingDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Check-out</FormLabel>
-                    <Popover open={checkOutPickerOpen} onOpenChange={setCheckOutPickerOpen}>
+                    <Popover open={checkOutPickerOpen} onOpenChange={setCheckOutPickerOpen} modal={false}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
