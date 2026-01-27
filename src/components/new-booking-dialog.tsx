@@ -5,7 +5,7 @@ import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { parse } from "date-fns"
+import { format, parse } from "date-fns"
 
 import {
   Dialog,
@@ -31,7 +31,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import type { Room } from "@/lib/data"
+import type { Room, Booking } from "@/lib/data"
 import { Input } from "./ui/input"
 
 const bookingFormSchema = z
@@ -78,6 +78,7 @@ type NewBookingDialogProps = {
   onOpenChange: (open: boolean) => void
   onSave: (data: NewBookingData) => void
   rooms: Room[]
+  bookingToEdit?: Booking | null
 }
 
 export function NewBookingDialog({
@@ -85,6 +86,7 @@ export function NewBookingDialog({
   onOpenChange,
   onSave,
   rooms,
+  bookingToEdit,
 }: NewBookingDialogProps) {
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingFormSchema),
@@ -98,30 +100,59 @@ export function NewBookingDialog({
     },
   })
 
+  const isEditing = !!bookingToEdit
+
   useEffect(() => {
-    if (!isOpen) {
-      form.reset({
-        guestName: "",
-        cloudbedsId: "",
-        roomId: "",
-        checkInDate: "",
-        checkOutDate: "",
-        status: "Confirmed",
-      })
+    if (isOpen) {
+      if (isEditing && bookingToEdit) {
+        form.reset({
+          guestName: bookingToEdit.guestName,
+          cloudbedsId: bookingToEdit.cloudbedsId,
+          roomId: bookingToEdit.roomId,
+          checkInDate: format(
+            parse(bookingToEdit.checkInDate, "yyyy-MM-dd", new Date()),
+            "dd/MM/yyyy"
+          ),
+          checkOutDate: format(
+            parse(bookingToEdit.checkOutDate, "yyyy-MM-dd", new Date()),
+            "dd/MM/yyyy"
+          ),
+          status: bookingToEdit.status,
+        })
+      } else {
+        form.reset({
+          guestName: "",
+          cloudbedsId: "",
+          roomId: "",
+          checkInDate: "",
+          checkOutDate: "",
+          status: "Confirmed",
+        })
+      }
     }
-  }, [isOpen, form])
+  }, [isOpen, bookingToEdit, isEditing, form])
 
   const onSubmit = (data: NewBookingData) => {
     onSave(data)
   }
 
+  const availableRooms = rooms.filter(
+    (room) =>
+      room.status === "Disponible" ||
+      (isEditing && room.id === bookingToEdit?.roomId)
+  )
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle className="font-headline">Nueva Reserva</DialogTitle>
+          <DialogTitle className="font-headline">
+            {isEditing ? "Modificar Reserva" : "Nueva Reserva"}
+          </DialogTitle>
           <DialogDescription>
-            Complete los detalles para crear una nueva reserva.
+            {isEditing
+              ? "Edite los detalles de la reserva."
+              : "Complete los detalles para crear una nueva reserva."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -173,13 +204,11 @@ export function NewBookingDialog({
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {rooms
-                        .filter((room) => room.status === "Disponible")
-                        .map((room) => (
-                          <SelectItem key={room.id} value={room.id}>
-                            Habitación {room.roomNumber} ({room.type})
-                          </SelectItem>
-                        ))}
+                      {availableRooms.map((room) => (
+                        <SelectItem key={room.id} value={room.id}>
+                          Habitación {room.roomNumber} ({room.type})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormMessage />
@@ -245,7 +274,9 @@ export function NewBookingDialog({
               >
                 Cancelar
               </Button>
-              <Button type="submit">Guardar Reserva</Button>
+              <Button type="submit">
+                {isEditing ? "Guardar Cambios" : "Guardar Reserva"}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

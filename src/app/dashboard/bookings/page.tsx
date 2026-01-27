@@ -1,13 +1,14 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import {
   collection,
   onSnapshot,
   addDoc,
   doc,
   updateDoc,
+  deleteDoc,
 } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,12 +18,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { QrCodeDialog } from "@/components/qr-code-dialog"
 import { PlusCircle } from "lucide-react"
 
-import type { Room } from "@/lib/data"
-import type { Booking } from "@/lib/data"
+import type { Room, Booking } from "@/lib/data"
 import type { BookingWithDetails } from "./columns"
-import { columns } from "./columns"
+import { getColumns } from "./columns"
 import { DataTable } from "./data-table"
 import { db } from "@/firebaseConfig"
 import {
@@ -35,7 +46,14 @@ import { format, parse } from "date-fns"
 export default function BookingsPage() {
   const [data, setData] = useState<BookingWithDetails[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
-  const [isNewBookingDialogOpen, setIsNewBookingDialogOpen] = useState(false)
+  const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false)
+  const [bookingToEdit, setBookingToEdit] =
+    useState<BookingWithDetails | null>(null)
+  const [bookingToDelete, setBookingToDelete] =
+    useState<BookingWithDetails | null>(null)
+  const [qrCodeBooking, setQrCodeBooking] =
+    useState<BookingWithDetails | null>(null)
+
   const { toast } = useToast()
 
   useEffect(() => {
@@ -92,22 +110,133 @@ export default function BookingsPage() {
     return () => unsubscribe()
   }, [rooms])
 
-  const handleSaveBooking = async (bookingData: NewBookingData) => {
-    try {
-      const matchedRoom = rooms.find(r => r.id === bookingData.roomId);
+  const handleAccessToggle = useCallback(
+    async (booking: BookingWithDetails, enabled: boolean) => {
+      const bookingRef = doc(db, "bookings", booking.id)
+      try {
+        await updateDoc(bookingRef, { accessEnabled: enabled })
+        toast({
+          title: "Acceso actualizado",
+          description: `El acceso para la reserva ${
+            booking.cloudbedsId
+          } ha sido ${enabled ? "habilitado" : "deshabilitado"}.`,
+        })
+      } catch (error) {
+        console.error("Error updating access status:", error)
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo actualizar el estado de acceso.",
+        })
+      }
+    },
+    [toast]
+  )
 
-      if (!matchedRoom) {
+  const handleCheckIn = useCallback(
+    async (booking: BookingWithDetails) => {
+      const bookingRef = doc(db, "bookings", booking.id)
+      const roomRef = doc(db, "rooms", booking.roomId)
+      try {
+        await updateDoc(bookingRef, {
+          status: "Checked-In",
+          accessEnabled: true,
+        })
+        await updateDoc(roomRef, { status: "Ocupada" })
+        toast({
+          title: "Check-in Exitoso",
+          description: `Check-in para reserva ${booking.cloudbedsId} en Habitación ${booking.room.roomNumber}.`,
+        })
+      } catch (error) {
+        console.error("Error during check-in:", error)
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo realizar el check-in.",
+        })
+      }
+    },
+    [toast]
+  )
+
+  const handleRemoteOpen = useCallback(
+    async (booking: BookingWithDetails) => {
+      const roomRef = doc(db, "rooms", booking.roomId)
+      try {
+        await updateDoc(roomRef, { remoteUnlock: Date.now() })
+        toast({
+          title: "Apertura Remota Activada",
+          description: `La puerta de la Habitación ${booking.room.roomNumber} se desbloqueará momentáneamente.`,
+        })
+      } catch (error) {
+        console.error("Error triggering remote open:", error)
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "No se pudo activar la apertura remota.",
+        })
+      }
+    },
+    [toast]
+  )
+
+  const handleEdit = useCallback((booking: BookingWithDetails) => {
+    setBookingToEdit(booking)
+    setIsBookingDialogOpen(true)
+  }, [])
+
+  const handleDelete = useCallback((booking: BookingWithDetails) => {
+    setBookingToDelete(booking)
+  }, [])
+
+  const handleShowQr = useCallback((booking: BookingWithDetails) => {
+    setQrCodeBooking(booking)
+  }, [])
+
+  const handleConfirmDelete = async () => {
+    if (!bookingToDelete) return
+
+    const bookingRef = doc(db, "bookings", bookingToDelete.id)
+    try {
+      if (bookingToDelete.status === "Checked-In") {
+        const roomRef = doc(db, "rooms", bookingToDelete.roomId)
+        await updateDoc(roomRef, { status: "Disponible" })
+      }
+
+      await deleteDoc(bookingRef)
+      toast({
+        title: "Reserva Eliminada",
+        description: "La reserva ha sido eliminada exitosamente.",
+      })
+    } catch (error) {
+      console.error("Error deleting booking:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo eliminar la reserva.",
+      })
+    } finally {
+      setBookingToDelete(null)
+    }
+  }
+
+  const handleSaveBooking = async (bookingData: NewBookingData) => {
+    const isEditing = !!bookingToEdit
+
+    try {
+      const matchedRoom = rooms.find((r) => r.id === bookingData.roomId)
+
+      if (!isEditing && matchedRoom?.status !== "Disponible") {
         toast({
           variant: "destructive",
           title: "Habitación no disponible",
-          description: `La habitación seleccionada ya no se encuentra disponible.`,
+          description: `La habitación seleccionada ya no está disponible.`,
         })
         return
       }
 
-      const checkIn = parse(bookingData.checkInDate, 'dd/MM/yyyy', new Date());
-      const checkOut = parse(bookingData.checkOutDate, 'dd/MM/yyyy', new Date());
-      const bookingsCol = collection(db, "bookings")
+      const checkIn = parse(bookingData.checkInDate, "dd/MM/yyyy", new Date())
+      const checkOut = parse(bookingData.checkOutDate, "dd/MM/yyyy", new Date())
 
       const bookingToSave = {
         guestName: bookingData.guestName,
@@ -119,37 +248,106 @@ export default function BookingsPage() {
         accessEnabled: bookingData.status === "Checked-In",
       }
 
-      await addDoc(bookingsCol, bookingToSave)
+      if (isEditing && bookingToEdit) {
+        const bookingRef = doc(db, "bookings", bookingToEdit.id)
+        await updateDoc(bookingRef, bookingToSave)
+        toast({
+          title: "Reserva Actualizada",
+          description: "Los cambios han sido guardados.",
+        })
+      } else {
+        await addDoc(collection(db, "bookings"), bookingToSave)
+        toast({
+          title: "Reserva Creada",
+          description: "La nueva reserva ha sido guardada exitosamente.",
+        })
+      }
 
-      // If guest is checking in immediately, mark room as occupied
-      if (bookingData.status === "Checked-In") {
+      if (bookingData.status === "Checked-In" && matchedRoom) {
         const roomRef = doc(db, "rooms", matchedRoom.id)
         await updateDoc(roomRef, { status: "Ocupada" })
       }
 
-      toast({
-        title: "Reserva Creada",
-        description: "La nueva reserva ha sido guardada exitosamente.",
-      })
-      setIsNewBookingDialogOpen(false)
+      setIsBookingDialogOpen(false)
+      setBookingToEdit(null)
     } catch (error) {
-      console.error("Error creating booking:", error)
+      console.error("Error saving booking:", error)
       toast({
         variant: "destructive",
         title: "Error",
-        description: "No se pudo crear la reserva.",
+        description: "No se pudo guardar la reserva.",
       })
     }
   }
 
+  const columns = useMemo(
+    () =>
+      getColumns({
+        onAccessToggle: handleAccessToggle,
+        onCheckIn: handleCheckIn,
+        onRemoteOpen: handleRemoteOpen,
+        onShowQr: handleShowQr,
+        onEdit: handleEdit,
+        onDelete: handleDelete,
+      }),
+    [
+      handleAccessToggle,
+      handleCheckIn,
+      handleRemoteOpen,
+      handleShowQr,
+      handleEdit,
+      handleDelete,
+    ]
+  )
+
   return (
     <>
       <NewBookingDialog
-        isOpen={isNewBookingDialogOpen}
-        onOpenChange={setIsNewBookingDialogOpen}
+        isOpen={isBookingDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) setBookingToEdit(null)
+          setIsBookingDialogOpen(open)
+        }}
         onSave={handleSaveBooking}
         rooms={rooms}
+        bookingToEdit={bookingToEdit}
       />
+
+      <QrCodeDialog
+        isOpen={!!qrCodeBooking}
+        onOpenChange={() => setQrCodeBooking(null)}
+        booking={qrCodeBooking}
+        room={qrCodeBooking?.room ?? null}
+      />
+
+      <AlertDialog
+        open={!!bookingToDelete}
+        onOpenChange={() => setBookingToDelete(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Se eliminará permanentemente la
+              reserva de{" "}
+              <span className="font-bold">{bookingToDelete?.guestName}</span>{" "}
+              (ID: {bookingToDelete?.cloudbedsId}).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setBookingToDelete(null)}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={handleConfirmDelete}
+            >
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
@@ -159,7 +357,13 @@ export default function BookingsPage() {
               habitaciones.
             </CardDescription>
           </div>
-          <Button size="sm" onClick={() => setIsNewBookingDialogOpen(true)}>
+          <Button
+            size="sm"
+            onClick={() => {
+              setBookingToEdit(null)
+              setIsBookingDialogOpen(true)
+            }}
+          >
             <PlusCircle className="mr-2 h-4 w-4" />
             Nueva Reserva
           </Button>
