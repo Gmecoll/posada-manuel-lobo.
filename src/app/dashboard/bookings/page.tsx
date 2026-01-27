@@ -80,6 +80,7 @@ export default function BookingsPage() {
           guestName: docData.guestName,
           booking_id: docData.booking_id,
           roomId: docData.roomId,
+          room_number: docData.room_number,
           checkInDate: docData.checkInDate,
           checkOutDate: docData.checkOutDate,
           status: docData.status,
@@ -226,7 +227,16 @@ export default function BookingsPage() {
     try {
       const matchedRoom = rooms.find((r) => r.id === bookingData.roomId)
 
-      if (!isEditing && matchedRoom?.status !== "Disponible") {
+      if (!matchedRoom) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "La habitación seleccionada no es válida.",
+        })
+        return
+      }
+
+      if (!isEditing && matchedRoom.status !== "Disponible") {
         toast({
           variant: "destructive",
           title: "Habitación no disponible",
@@ -242,6 +252,7 @@ export default function BookingsPage() {
         guestName: bookingData.guestName,
         booking_id: bookingData.booking_id,
         roomId: bookingData.roomId,
+        room_number: matchedRoom.roomNumber,
         checkInDate: format(checkIn, "yyyy-MM-dd"),
         checkOutDate: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,
@@ -263,7 +274,7 @@ export default function BookingsPage() {
         })
       }
 
-      if (bookingData.status === "Checked-In" && matchedRoom) {
+      if (bookingData.status === "Checked-In") {
         const roomRef = doc(db, "rooms", matchedRoom.id)
         await updateDoc(roomRef, { status: "Ocupada" })
       }

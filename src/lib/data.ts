@@ -18,6 +18,7 @@ export type Booking = {
   guestName: string;
   booking_id: string;
   roomId: string;
+  room_number: string;
   checkInDate: string;
   checkOutDate: string;
   status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled';
@@ -53,6 +54,7 @@ export const bookings: Booking[] = [
     guestName: 'John Doe',
     booking_id: 'cb12345',
     roomId: 'room-1',
+    room_number: '1',
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString().split('T')[0],
     status: 'Checked-In',
@@ -63,6 +65,7 @@ export const bookings: Booking[] = [
     guestName: 'Jane Smith',
     booking_id: 'cb12346',
     roomId: 'room-2',
+    room_number: '2',
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().split('T')[0],
     status: 'Confirmed',
@@ -73,6 +76,7 @@ export const bookings: Booking[] = [
     guestName: 'Peter Jones',
     booking_id: 'cb12347',
     roomId: 'room-8',
+    room_number: '8',
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
     status: 'Confirmed',
@@ -83,6 +87,7 @@ export const bookings: Booking[] = [
     guestName: 'Mary Williams',
     booking_id: 'cb12348',
     roomId: 'room-5',
+    room_number: '5',
     checkInDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 4)).toISOString().split('T')[0],
     status: 'Confirmed',
@@ -92,7 +97,8 @@ export const bookings: Booking[] = [
     id: 'booking-5',
     guestName: 'Chris Brown',
     booking_id: 'cb12349',
-    roomId: 'room-1', // some old booking
+    roomId: 'room-1',
+    room_number: '1',
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0],
     status: 'Checked-Out',
@@ -102,7 +108,8 @@ export const bookings: Booking[] = [
     id: 'booking-6',
     guestName: 'Patricia Green',
     booking_id: 'cb12350',
-    roomId: 'room-4', // old booking
+    roomId: 'room-4',
+    room_number: '4',
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     status: 'Cancelled',
