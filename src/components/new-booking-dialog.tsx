@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -72,6 +72,9 @@ export function NewBookingDialog({
   onSave,
   rooms,
 }: NewBookingDialogProps) {
+  const [checkInPickerOpen, setCheckInPickerOpen] = useState(false)
+  const [checkOutPickerOpen, setCheckOutPickerOpen] = useState(false)
+
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
@@ -156,7 +159,7 @@ export function NewBookingDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Check-in</FormLabel>
-                    <Popover>
+                    <Popover open={checkInPickerOpen} onOpenChange={setCheckInPickerOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -179,7 +182,10 @@ export function NewBookingDialog({
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            field.onChange(date)
+                            setCheckInPickerOpen(false)
+                          }}
                           disabled={(date) =>
                             date < new Date(new Date().setHours(0, 0, 0, 0))
                           }
@@ -197,7 +203,7 @@ export function NewBookingDialog({
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Check-out</FormLabel>
-                    <Popover>
+                    <Popover open={checkOutPickerOpen} onOpenChange={setCheckOutPickerOpen}>
                       <PopoverTrigger asChild>
                         <FormControl>
                           <Button
@@ -220,7 +226,10 @@ export function NewBookingDialog({
                         <Calendar
                           mode="single"
                           selected={field.value}
-                          onSelect={field.onChange}
+                          onSelect={(date) => {
+                            field.onChange(date)
+                            setCheckOutPickerOpen(false)
+                          }}
                           disabled={(date) =>
                             !form.getValues("checkInDate") ||
                             date <= form.getValues("checkInDate")
