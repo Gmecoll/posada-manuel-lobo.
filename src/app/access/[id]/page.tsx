@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -110,7 +111,25 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
     )
   }
 
-  const accessDenied = !booking.accessEnabled || booking.status !== "Checked-In"
+  const accessDeniedByStatus =
+    !booking.accessEnabled || booking.status !== "Checked-In"
+
+  // Date validation logic
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // Date without time
+  let accessExpired = false
+  if (booking.checkInDate && booking.checkOutDate) {
+    // Firestore dates are 'yyyy-MM-dd'. Appending T00:00:00 treats them as local time at midnight.
+    const checkInDate = new Date(booking.checkInDate + "T00:00:00")
+    const checkOutDate = new Date(booking.checkOutDate + "T00:00:00")
+
+    // Access is valid from the start of check-in day through the end of check-out day.
+    if (today < checkInDate || today > checkOutDate) {
+      accessExpired = true
+    }
+  }
+
+  const finalAccessDenied = accessDeniedByStatus || accessExpired
 
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-4">
@@ -124,7 +143,9 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
         <p className="mt-2 text-muted-foreground">
           {isUnlocked
             ? "¡Bienvenido! La puerta está desbloqueada."
-            : accessDenied
+            : accessExpired
+            ? "Acceso Expirado. Contacta con recepción."
+            : accessDeniedByStatus
             ? "Acceso restringido. Contacta con recepción."
             : "Pulsa el botón para desbloquear la puerta."}
         </p>
@@ -149,11 +170,11 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
               isUnlocked ? "opacity-0 scale-110" : "opacity-100 scale-100"
             )}
           >
-            {accessDenied ? (
+            {finalAccessDenied ? (
               <div className="flex flex-col items-center gap-4 text-destructive">
                 <ShieldOff className="h-24 w-24" />
                 <span className="text-xl font-semibold">
-                  Acceso Deshabilitado
+                  {accessExpired ? "Acceso Expirado" : "Acceso Deshabilitado"}
                 </span>
               </div>
             ) : (
