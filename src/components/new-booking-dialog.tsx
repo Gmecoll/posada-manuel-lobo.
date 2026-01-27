@@ -35,11 +35,14 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { cn } from "@/lib/utils"
-import type { Guest, Room } from "@/lib/data"
+import type { Room } from "@/lib/data"
+import { Input } from "./ui/input"
 
 const bookingSchema = z
   .object({
-    guestId: z.string({ required_error: "Debe seleccionar un huésped." }),
+    guestName: z
+      .string()
+      .min(1, { message: "El nombre del huésped es requerido." }),
     roomId: z.string({ required_error: "Debe seleccionar una habitación." }),
     checkInDate: z.date({
       required_error: "La fecha de check-in es requerida.",
@@ -60,7 +63,6 @@ type NewBookingDialogProps = {
   isOpen: boolean
   onOpenChange: (open: boolean) => void
   onSave: (data: NewBookingData) => void
-  guests: Guest[]
   rooms: Room[]
 }
 
@@ -68,13 +70,13 @@ export function NewBookingDialog({
   isOpen,
   onOpenChange,
   onSave,
-  guests,
   rooms,
 }: NewBookingDialogProps) {
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
       status: "Confirmed",
+      guestName: "",
     },
   })
 
@@ -82,7 +84,7 @@ export function NewBookingDialog({
     if (!isOpen) {
       form.reset({
         status: "Confirmed",
-        guestId: undefined,
+        guestName: "",
         roomId: undefined,
         checkInDate: undefined,
         checkOutDate: undefined,
@@ -107,27 +109,13 @@ export function NewBookingDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
             <FormField
               control={form.control}
-              name="guestId"
+              name="guestName"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Huésped</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione un huésped" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {guests.map((guest) => (
-                        <SelectItem key={guest.id} value={guest.id}>
-                          {guest.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <Input placeholder="Nombre del huésped" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

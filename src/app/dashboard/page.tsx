@@ -25,7 +25,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { guests } from "@/lib/data"
 import type { Booking, Room } from "@/lib/data"
 import { db } from "@/firebaseConfig"
 
@@ -149,15 +148,11 @@ export default function Dashboard() {
             </TableHeader>
             <TableBody>
               {recentBookings.map((booking) => {
-                const guest = guests.find((g) => g.id === booking.guestId)
                 const room = allRooms.find((r) => r.id === booking.roomId)
                 return (
                   <TableRow key={booking.id}>
                     <TableCell>
-                      <div className="font-medium">{guest?.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {guest?.email}
-                      </div>
+                      <div className="font-medium">{booking.guestName}</div>
                     </TableCell>
                     <TableCell>Habitación {room?.roomNumber}</TableCell>
                     <TableCell>{booking.checkInDate}</TableCell>

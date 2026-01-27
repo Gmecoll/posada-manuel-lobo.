@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/card"
 import { PlusCircle } from "lucide-react"
 
-import { guests, type Room } from "@/lib/data"
+import type { Room, Guest } from "@/lib/data"
 import type { Booking } from "@/lib/data"
 import type { BookingWithDetails } from "./columns"
 import { columns } from "./columns"
@@ -57,7 +57,7 @@ export default function BookingsPage() {
         const docData = doc.data()
         return {
           id: doc.id,
-          guestId: docData.guestId,
+          guestName: docData.guestName,
           roomId: docData.roomId,
           checkInDate: docData.checkInDate,
           checkOutDate: docData.checkOutDate,
@@ -68,10 +68,14 @@ export default function BookingsPage() {
 
       const detailedBookings = bookingsFromDb
         .map((booking) => {
-          const guest = guests.find((g) => g.id === booking.guestId)
           const room = rooms.find((r) => r.id === booking.roomId)
-          if (!guest || !room) {
+          if (!room) {
             return null
+          }
+          const guest: Guest = {
+            id: `guest-${booking.id}`,
+            name: booking.guestName,
+            email: "", // email is not available anymore
           }
           return {
             ...booking,
@@ -96,7 +100,7 @@ export default function BookingsPage() {
       const bookingsCol = collection(db, "bookings")
 
       const bookingToSave = {
-        guestId: bookingData.guestId,
+        guestName: bookingData.guestName,
         roomId: bookingData.roomId,
         checkInDate: bookingData.checkInDate.toISOString().split("T")[0],
         checkOutDate: bookingData.checkOutDate.toISOString().split("T")[0],
@@ -133,7 +137,6 @@ export default function BookingsPage() {
         isOpen={isNewBookingDialogOpen}
         onOpenChange={setIsNewBookingDialogOpen}
         onSave={handleSaveBooking}
-        guests={guests}
         rooms={rooms}
       />
       <Card>
