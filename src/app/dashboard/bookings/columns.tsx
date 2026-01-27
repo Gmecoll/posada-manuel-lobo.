@@ -35,12 +35,17 @@ export type BookingWithDetails = Booking & {
 
 export const columns: ColumnDef<BookingWithDetails>[] = [
   {
+    accessorKey: "guestName",
+    header: "Huésped",
+    cell: ({ row }) => {
+      return <div className="font-medium">{row.original.guestName}</div>
+    },
+  },
+  {
     accessorKey: "cloudbedsId",
     header: "ID Cloudbeds",
     cell: ({ row }) => {
-      return (
-        <div className="font-medium">{row.original.cloudbedsId}</div>
-      )
+      return <div className="font-medium">{row.original.cloudbedsId}</div>
     },
   },
   {

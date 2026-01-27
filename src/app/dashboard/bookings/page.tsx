@@ -59,6 +59,7 @@ export default function BookingsPage() {
         const docData = doc.data()
         return {
           id: doc.id,
+          guestName: docData.guestName,
           cloudbedsId: docData.cloudbedsId,
           roomId: docData.roomId,
           checkInDate: docData.checkInDate,
@@ -109,6 +110,7 @@ export default function BookingsPage() {
       const bookingsCol = collection(db, "bookings")
 
       const bookingToSave = {
+        guestName: bookingData.guestName,
         cloudbedsId: bookingData.cloudbedsId,
         roomId: bookingData.roomId,
         checkInDate: format(checkIn, "yyyy-MM-dd"),
