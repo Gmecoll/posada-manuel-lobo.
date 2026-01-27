@@ -179,7 +179,7 @@ export function NewBookingDialog({
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent 
-                        className="w-auto p-0" 
+                        className="w-auto p-0 z-[100]" 
                         align="start"
                         onOpenAutoFocus={(e) => e.preventDefault()}
                       >
@@ -226,7 +226,7 @@ export function NewBookingDialog({
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent 
-                        className="w-auto p-0" 
+                        className="w-auto p-0 z-[100]" 
                         align="start"
                         onOpenAutoFocus={(e) => e.preventDefault()}
                       >
