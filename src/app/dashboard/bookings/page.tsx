@@ -29,6 +29,7 @@ import {
   type NewBookingData,
 } from "@/components/new-booking-dialog"
 import { useToast } from "@/hooks/use-toast"
+import { format } from "date-fns"
 
 export default function BookingsPage() {
   const [data, setData] = useState<BookingWithDetails[]>([])
@@ -97,22 +98,39 @@ export default function BookingsPage() {
 
   const handleSaveBooking = async (bookingData: NewBookingData) => {
     try {
+      const roomNumberInput = bookingData.roomNumber.trim()
+      const availableRooms = rooms.filter((r) => r.status === "Disponible")
+
+      const matchedRoom = availableRooms.find((room) => {
+        const digits = room.roomNumber.match(/\d+/)
+        return digits ? digits[0] === roomNumberInput : false
+      })
+
+      if (!matchedRoom) {
+        toast({
+          variant: "destructive",
+          title: "Habitación no encontrada",
+          description: `No se encontró una habitación disponible con el número ${roomNumberInput}.`,
+        })
+        return
+      }
+
       const bookingsCol = collection(db, "bookings")
 
       const bookingToSave = {
         guestName: bookingData.guestName,
-        roomId: bookingData.roomId,
-        checkInDate: bookingData.checkInDate.toISOString().split("T")[0],
-        checkOutDate: bookingData.checkOutDate.toISOString().split("T")[0],
+        roomId: matchedRoom.id,
+        checkInDate: format(bookingData.checkInDate, "yyyy-MM-dd"),
+        checkOutDate: format(bookingData.checkOutDate, "yyyy-MM-dd"),
         status: bookingData.status,
-        accessEnabled: false, // New bookings have access disabled by default
+        accessEnabled: bookingData.status === "Checked-In",
       }
 
       await addDoc(bookingsCol, bookingToSave)
 
       // If guest is checking in immediately, mark room as occupied
       if (bookingData.status === "Checked-In") {
-        const roomRef = doc(db, "rooms", bookingData.roomId)
+        const roomRef = doc(db, "rooms", matchedRoom.id)
         await updateDoc(roomRef, { status: "Ocupada" })
       }
 
