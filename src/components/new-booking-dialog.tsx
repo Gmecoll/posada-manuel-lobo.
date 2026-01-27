@@ -1,12 +1,10 @@
 
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { format } from "date-fns"
-import { CalendarIcon } from "lucide-react"
 
 import {
   Dialog,
@@ -34,30 +32,46 @@ import {
 import { Button } from "@/components/ui/button"
 import type { Room } from "@/lib/data"
 import { Input } from "./ui/input"
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover"
-import { cn } from "@/lib/utils"
-import { Calendar } from "./ui/calendar"
 
-const bookingSchema = z
+const dateRegex = /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/
+
+// Helper to parse dd/mm/yyyy string into a Date object
+const parseDateString = (dateString: string): Date => {
+  const [day, month, year] = dateString.split("/").map(Number)
+  // JavaScript month is 0-indexed, so we subtract 1
+  return new Date(year, month - 1, day)
+}
+
+const bookingFormSchema = z
   .object({
     guestName: z
       .string()
       .min(1, { message: "El nombre del huésped es requerido." }),
     roomId: z.string({ required_error: "Debe seleccionar una habitación." }),
-    checkInDate: z.date({
-      required_error: "La fecha de check-in es requerida.",
+    checkInDate: z.string().regex(dateRegex, {
+      message: "La fecha debe estar en formato dd/mm/aaaa.",
     }),
-    checkOutDate: z.date({
-      required_error: "La fecha de check-out es requerida.",
+    checkOutDate: z.string().regex(dateRegex, {
+      message: "La fecha debe estar en formato dd/mm/aaaa.",
     }),
     status: z.enum(["Confirmed", "Checked-In", "Checked-Out", "Cancelled"]),
   })
-  .refine((data) => data.checkOutDate > data.checkInDate, {
+  .refine((data) => parseDateString(data.checkOutDate) > parseDateString(data.checkInDate), {
     message: "La fecha de check-out debe ser posterior a la de check-in.",
     path: ["checkOutDate"],
   })
 
-export type NewBookingData = z.infer<typeof bookingSchema>
+// This is the data type for the form itself
+type BookingFormData = z.infer<typeof bookingFormSchema>
+
+// This is the data type expected by the parent component's onSave function
+export type NewBookingData = {
+  guestName: string
+  roomId: string
+  checkInDate: Date
+  checkOutDate: Date
+  status: "Confirmed" | "Checked-In"
+}
 
 type NewBookingDialogProps = {
   isOpen: boolean
@@ -72,14 +86,13 @@ export function NewBookingDialog({
   onSave,
   rooms,
 }: NewBookingDialogProps) {
-  const [isCheckInOpen, setCheckInOpen] = useState(false)
-  const [isCheckOutOpen, setCheckOutOpen] = useState(false)
-
-  const form = useForm<NewBookingData>({
-    resolver: zodResolver(bookingSchema),
+  const form = useForm<BookingFormData>({
+    resolver: zodResolver(bookingFormSchema),
     defaultValues: {
       status: "Confirmed",
       guestName: "",
+      checkInDate: "",
+      checkOutDate: "",
     },
   })
 
@@ -89,14 +102,20 @@ export function NewBookingDialog({
         status: "Confirmed",
         guestName: "",
         roomId: undefined,
-        checkInDate: undefined,
-        checkOutDate: undefined,
+        checkInDate: "",
+        checkOutDate: "",
       })
     }
   }, [isOpen, form])
 
-  const onSubmit = (data: NewBookingData) => {
-    onSave(data)
+  const onSubmit = (data: BookingFormData) => {
+    // Convert date strings to Date objects before saving
+    const dataToSave: NewBookingData = {
+      ...data,
+      checkInDate: parseDateString(data.checkInDate),
+      checkOutDate: parseDateString(data.checkOutDate),
+    }
+    onSave(dataToSave)
   }
 
   return (
@@ -159,46 +178,11 @@ export function NewBookingDialog({
                 control={form.control}
                 name="checkInDate"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Check-in</FormLabel>
-                    <Popover
-                      open={isCheckInOpen}
-                      onOpenChange={setCheckInOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "dd/MM/yyyy")
-                            ) : (
-                              <span>Elige una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-auto p-0"
-                        align="start"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                      >
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            field.onChange(date)
-                            setCheckInOpen(false)
-                          }}
-                          disabled={(date) => date < new Date("1900-01-01")}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <FormControl>
+                      <Input placeholder="dd/mm/aaaa" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -207,48 +191,11 @@ export function NewBookingDialog({
                 control={form.control}
                 name="checkOutDate"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Check-out</FormLabel>
-                    <Popover
-                      open={isCheckOutOpen}
-                      onOpenChange={setCheckOutOpen}
-                    >
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant={"outline"}
-                            className={cn(
-                              "w-full pl-3 text-left font-normal",
-                              !field.value && "text-muted-foreground"
-                            )}
-                          >
-                            {field.value ? (
-                              format(field.value, "dd/MM/yyyy")
-                            ) : (
-                              <span>Elige una fecha</span>
-                            )}
-                            <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-auto p-0"
-                        align="start"
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                      >
-                        <Calendar
-                          mode="single"
-                          selected={field.value}
-                          onSelect={(date) => {
-                            field.onChange(date)
-                            setCheckOutOpen(false)
-                          }}
-                          disabled={(date) =>
-                            date <= (form.watch("checkInDate") || new Date(0))
-                          }
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <FormControl>
+                      <Input placeholder="dd/mm/aaaa" {...field} />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
