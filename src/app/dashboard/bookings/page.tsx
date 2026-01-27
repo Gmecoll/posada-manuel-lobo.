@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect, useMemo, useCallback } from "react"
@@ -333,7 +332,11 @@ export default function BookingsPage() {
 
       <AlertDialog
         open={!!bookingToDelete}
-        onOpenChange={() => setBookingToDelete(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setBookingToDelete(null)
+          }
+        }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -346,9 +349,7 @@ export default function BookingsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setBookingToDelete(null)}>
-              Cancelar
-            </AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={handleConfirmDelete}
