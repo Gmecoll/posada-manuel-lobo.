@@ -25,60 +25,63 @@ export default function GuestLoginPage() {
     setIsLoading(true)
     setError(null)
 
-    if (!roomNumber || !guestName) {
+    const searchRoomNumber = roomNumber.trim();
+    const searchGuestName = guestName.trim().toLowerCase();
+
+    if (!searchRoomNumber || !searchGuestName) {
       setError("Por favor, ingrese el número de habitación y su nombre.")
       setIsLoading(false)
       return
     }
 
     try {
-      // It's inefficient to scan all docs, but for a small "Posada" it's ok.
-      const roomsRef = collection(db, "rooms")
-      const roomsSnapshot = await getDocs(roomsRef)
-      const allRooms = roomsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Room[]
+      const roomsSnapshot = await getDocs(collection(db, "rooms"));
+      const allRooms = roomsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Room[];
 
-      const bookingsRef = collection(db, "bookings")
-      const bookingsSnapshot = await getDocs(bookingsRef)
-      const allBookings = bookingsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Booking[]
+      const bookingsSnapshot = await getDocs(collection(db, "bookings"));
+      const allBookings = bookingsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Booking[];
 
-      // Find booking matching guest name (case-insensitive, partial match)
-      const matchingBookings = allBookings.filter(
-        (booking) => booking.guestName.toLowerCase().includes(guestName.toLowerCase().trim())
-      )
-      
-      if (matchingBookings.length === 0) {
-        setError("No se encontró su reserva. Verifique que el nombre y habitación sean correctos.")
-        setIsLoading(false)
-        return
-      }
-      
       let foundBooking: Booking | null = null;
-      for (const booking of matchingBookings) {
-        const room = allRooms.find((r) => r.id === booking.roomId)
-        if (room) {
-          // Extract number from room name e.g. "Habitación 4" -> "4"
-          const roomNumberFromDb = (room.roomNumber.match(/\d+/) || [])[0]
-          if (roomNumberFromDb === roomNumber.trim()) {
-            foundBooking = booking
-            break
+
+      for (const booking of allBookings) {
+        // Defensive check for guestName
+        if (!booking.guestName || typeof booking.guestName !== 'string') continue;
+
+        const bookingGuestName = booking.guestName.trim().toLowerCase();
+        
+        // Check if guest name matches
+        if (bookingGuestName.includes(searchGuestName)) {
+          const room = allRooms.find((r) => r.id === booking.roomId);
+
+          if (room) {
+            // Defensive check for roomNumber
+            if (!room.roomNumber) continue;
+
+            // Coerce to string and extract digits
+            const roomNumberMatch = String(room.roomNumber).match(/\d+/);
+            
+            if (roomNumberMatch && roomNumberMatch[0] === searchRoomNumber) {
+              foundBooking = booking;
+              break; // Found a match, exit loop
+            }
           }
         }
       }
-
+      
       if (foundBooking) {
         if (foundBooking.accessEnabled && foundBooking.status === "Checked-In") {
-          router.push(`/access/${foundBooking.id}`)
+          router.push(`/access/${foundBooking.id}`);
         } else {
-          setError("El acceso para esta reserva no está habilitado o la reserva no está activa. Contacte con recepción.")
+          setError("El acceso para esta reserva no está habilitado o la reserva no está activa. Contacte con recepción.");
         }
       } else {
-        setError("No se encontró su reserva. Verifique que el nombre y habitación sean correctos.")
+        setError("No se encontró su reserva. Verifique que el nombre y habitación sean correctos.");
       }
     } catch (err) {
-      console.error(err)
-      setError("Ocurrió un error al verificar su reserva. Intente nuevamente.")
+      console.error("Error during login verification:", err);
+      setError("Ocurrió un error al verificar su reserva. Intente nuevamente.");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
   }
 
