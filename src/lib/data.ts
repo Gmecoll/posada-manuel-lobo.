@@ -3,6 +3,7 @@ export type Room = {
   roomNumber: string;
   type: 'Standard' | 'Deluxe' | 'Suite';
   status: 'Disponible' | 'Ocupada' | 'Limpieza';
+  remoteUnlock?: number; // Timestamp for remote unlock
 };
 
 export type Guest = {
@@ -18,6 +19,7 @@ export type Booking = {
   checkInDate: string;
   checkOutDate: string;
   status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled';
+  accessEnabled: boolean;
 };
 
 export const guests: Guest[] = [
@@ -31,16 +33,16 @@ export const guests: Guest[] = [
 
 // This is now just initial data for populating firestore. The app will read from Firestore.
 export const rooms: Room[] = [
-  { id: 'room-1', roomNumber: '101', type: 'Standard', status: 'Ocupada' },
-  { id: 'room-2', roomNumber: '102', type: 'Deluxe', status: 'Ocupada' },
-  { id: 'room-3', roomNumber: '103', type: 'Suite', status: 'Limpieza' },
-  { id: 'room-4', roomNumber: '104', type: 'Standard', status: 'Disponible' },
-  { id: 'room-5', roomNumber: '201', type: 'Deluxe', status: 'Ocupada' },
-  { id: 'room-6', roomNumber: '202', type: 'Standard', status: 'Disponible' },
-  { id: 'room-7', roomNumber: '203', type: 'Standard', status: 'Disponible' },
-  { id: 'room-8', roomNumber: '301', type: 'Suite', status: 'Ocupada' },
-  { id: 'room-9', roomNumber: '302', type: 'Deluxe', status: 'Limpieza' },
-  { id: 'room-10', roomNumber: '303', type: 'Standard', status: 'Disponible' },
+  { id: 'room-1', roomNumber: '1', type: 'Standard', status: 'Ocupada' },
+  { id: 'room-2', roomNumber: '2', type: 'Deluxe', status: 'Ocupada' },
+  { id: 'room-3', roomNumber: '3', type: 'Suite', status: 'Limpieza' },
+  { id: 'room-4', roomNumber: '4', type: 'Standard', status: 'Disponible' },
+  { id: 'room-5', roomNumber: '5', type: 'Deluxe', status: 'Ocupada' },
+  { id: 'room-6', roomNumber: '6', type: 'Standard', status: 'Disponible' },
+  { id: 'room-7', roomNumber: '7', type: 'Standard', status: 'Disponible' },
+  { id: 'room-8', roomNumber: '8', type: 'Suite', status: 'Ocupada' },
+  { id: 'room-9', roomNumber: '9', type: 'Deluxe', status: 'Limpieza' },
+  { id: 'room-10', roomNumber: '10', type: 'Standard', status: 'Disponible' },
 ];
 
 export const bookings: Booking[] = [
@@ -51,6 +53,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString().split('T')[0],
     status: 'Checked-In',
+    accessEnabled: true,
   },
   {
     id: 'booking-2',
@@ -59,6 +62,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().split('T')[0],
     status: 'Confirmed',
+    accessEnabled: false,
   },
   {
     id: 'booking-3',
@@ -67,6 +71,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date().toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
     status: 'Confirmed',
+    accessEnabled: true,
   },
   {
     id: 'booking-4',
@@ -75,6 +80,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 4)).toISOString().split('T')[0],
     status: 'Confirmed',
+    accessEnabled: false,
   },
   {
     id: 'booking-5',
@@ -83,6 +89,7 @@ export const bookings: Booking[] = [
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0],
     status: 'Checked-Out',
+    accessEnabled: false,
   },
   {
     id: 'booking-6',
@@ -91,5 +98,6 @@ export const bookings: Booking[] = [
     checkInDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     status: 'Cancelled',
+    accessEnabled: false,
   },
 ];

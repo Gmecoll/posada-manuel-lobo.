@@ -50,8 +50,8 @@ export default function RoomsPage() {
           id: doc.id,
           ...doc.data(),
         }))
-        // Ensure data is sorted by room number
-        .sort((a, b) => (a.roomNumber ?? "").localeCompare(b.roomNumber ?? "")) as Room[]
+        // Ensure data is sorted by room number (as numbers)
+        .sort((a, b) => parseInt(a.roomNumber ?? '0') - parseInt(b.roomNumber ?? '0')) as Room[]
       setRooms(roomsFromDb)
     })
 
@@ -84,6 +84,7 @@ export default function RoomsPage() {
         roomNumber: room.roomNumber,
         type: room.type,
         status: room.status,
+        remoteUnlock: null,
       })
     })
 

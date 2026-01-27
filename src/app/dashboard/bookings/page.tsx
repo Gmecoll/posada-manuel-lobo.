@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/card"
 import { PlusCircle } from "lucide-react"
 
-import { guests, type Room, type Booking } from "@/lib/data"
+import { guests, type Room } from "@/lib/data"
+import type { Booking } from "@/lib/data"
 import type { BookingWithDetails } from "./columns"
 import { columns } from "./columns"
 import { DataTable } from "./data-table"
@@ -48,6 +49,7 @@ export default function BookingsPage() {
           checkInDate: docData.checkInDate,
           checkOutDate: docData.checkOutDate,
           status: docData.status,
+          accessEnabled: docData.accessEnabled,
         } as Booking
       })
 

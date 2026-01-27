@@ -2,7 +2,15 @@
 
 import { useState } from "react"
 import { type ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, QrCode, Check, DoorOpen, Trash2 } from "lucide-react"
+import {
+  MoreHorizontal,
+  QrCode,
+  Check,
+  DoorOpen,
+  Trash2,
+  KeyRound,
+} from "lucide-react"
+import { doc, updateDoc } from "firebase/firestore"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,6 +25,8 @@ import {
 import { QrCodeDialog } from "@/components/qr-code-dialog"
 import type { Booking, Guest, Room } from "@/lib/data"
 import { useToast } from "@/hooks/use-toast"
+import { Switch } from "@/components/ui/switch"
+import { db } from "@/firebaseConfig"
 
 export type BookingWithDetails = Booking & {
   guest: Guest
@@ -30,7 +40,7 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
     cell: ({ row }) => {
       const guest = row.original.guest
       if (!guest) {
-        return null;
+        return null
       }
       return (
         <div className="font-medium">
@@ -82,24 +92,81 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
     },
   },
   {
+    accessorKey: "accessEnabled",
+    header: "Acceso",
+    cell: ({ row }) => {
+      const booking = row.original
+      const { toast } = useToast()
+
+      const handleAccessChange = async (enabled: boolean) => {
+        const bookingRef = doc(db, "bookings", booking.id)
+        try {
+          await updateDoc(bookingRef, { accessEnabled: enabled })
+          toast({
+            title: "Acceso actualizado",
+            description: `El acceso para ${
+              booking.guest.name
+            } ha sido ${enabled ? "habilitado" : "deshabilitado"}.`,
+          })
+        } catch (error) {
+          console.error("Error updating access status:", error)
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo actualizar el estado de acceso.",
+          })
+        }
+      }
+
+      return (
+        <div className="flex items-center space-x-2">
+          <Switch
+            id={`access-switch-${booking.id}`}
+            checked={booking.accessEnabled}
+            onCheckedChange={handleAccessChange}
+            disabled={booking.status !== "Checked-In"}
+          />
+        </div>
+      )
+    },
+  },
+  {
     id: "actions",
     cell: ({ row }) => {
       const booking = row.original
       const { toast } = useToast()
       const [isQrDialogOpen, setQrDialogOpen] = useState(false)
-      
+
       const handleCheckIn = () => {
         // In a real app, you would call a server action here.
-        console.log("Checking in booking:", booking.id);
+        console.log("Checking in booking:", booking.id)
         toast({
           title: "Check-in Exitoso",
           description: `${booking.guest.name} ha sido registrado en la Habitación ${booking.room.roomNumber}.`,
-        });
-      };
+        })
+      }
+
+      const handleRemoteOpen = async () => {
+        const roomRef = doc(db, "rooms", booking.roomId)
+        try {
+          await updateDoc(roomRef, { remoteUnlock: Date.now() })
+          toast({
+            title: "Apertura Remota Activada",
+            description: `La puerta de la Habitación ${booking.room.roomNumber} se desbloqueará momentáneamente.`,
+          })
+        } catch (error) {
+          console.error("Error triggering remote open:", error)
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "No se pudo activar la apertura remota.",
+          })
+        }
+      }
 
       return (
         <>
-          <QrCodeDialog 
+          <QrCodeDialog
             isOpen={isQrDialogOpen}
             onOpenChange={setQrDialogOpen}
             booking={booking}
@@ -126,6 +193,10 @@ export const columns: ColumnDef<BookingWithDetails>[] = [
                   <DropdownMenuItem onClick={() => setQrDialogOpen(true)}>
                     <QrCode className="mr-2 h-4 w-4" />
                     Generar Código QR
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleRemoteOpen}>
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    Apertura Remota
                   </DropdownMenuItem>
                   <DropdownMenuItem>
                     <DoorOpen className="mr-2 h-4 w-4" />
