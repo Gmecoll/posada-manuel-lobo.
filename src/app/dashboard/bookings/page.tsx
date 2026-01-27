@@ -1,7 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot } from "firebase/firestore"
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  doc,
+  updateDoc,
+} from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -18,10 +24,17 @@ import type { BookingWithDetails } from "./columns"
 import { columns } from "./columns"
 import { DataTable } from "./data-table"
 import { db } from "@/firebaseConfig"
+import {
+  NewBookingDialog,
+  type NewBookingData,
+} from "@/components/new-booking-dialog"
+import { useToast } from "@/hooks/use-toast"
 
 export default function BookingsPage() {
   const [data, setData] = useState<BookingWithDetails[]>([])
   const [rooms, setRooms] = useState<Room[]>([])
+  const [isNewBookingDialogOpen, setIsNewBookingDialogOpen] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
     const roomsCol = collection(db, "rooms")
@@ -78,23 +91,69 @@ export default function BookingsPage() {
     return () => unsubscribe()
   }, [rooms])
 
+  const handleSaveBooking = async (bookingData: NewBookingData) => {
+    try {
+      const bookingsCol = collection(db, "bookings")
+
+      const bookingToSave = {
+        guestId: bookingData.guestId,
+        roomId: bookingData.roomId,
+        checkInDate: bookingData.checkInDate.toISOString().split("T")[0],
+        checkOutDate: bookingData.checkOutDate.toISOString().split("T")[0],
+        status: bookingData.status,
+        accessEnabled: false, // New bookings have access disabled by default
+      }
+
+      await addDoc(bookingsCol, bookingToSave)
+
+      // If guest is checking in immediately, mark room as occupied
+      if (bookingData.status === "Checked-In") {
+        const roomRef = doc(db, "rooms", bookingData.roomId)
+        await updateDoc(roomRef, { status: "Ocupada" })
+      }
+
+      toast({
+        title: "Reserva Creada",
+        description: "La nueva reserva ha sido guardada exitosamente.",
+      })
+      setIsNewBookingDialogOpen(false)
+    } catch (error) {
+      console.error("Error creating booking:", error)
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "No se pudo crear la reserva.",
+      })
+    }
+  }
+
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle className="font-headline">Reservas</CardTitle>
-          <CardDescription>
-            Gestiona las reservas de los huéspedes y la asignación de habitaciones.
-          </CardDescription>
-        </div>
-        <Button size="sm">
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Nueva Reserva
-        </Button>
-      </CardHeader>
-      <CardContent>
-        <DataTable columns={columns} data={data} />
-      </CardContent>
-    </Card>
+    <>
+      <NewBookingDialog
+        isOpen={isNewBookingDialogOpen}
+        onOpenChange={setIsNewBookingDialogOpen}
+        onSave={handleSaveBooking}
+        guests={guests}
+        rooms={rooms}
+      />
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="font-headline">Reservas</CardTitle>
+            <CardDescription>
+              Gestiona las reservas de los huéspedes y la asignación de
+              habitaciones.
+            </CardDescription>
+          </div>
+          <Button size="sm" onClick={() => setIsNewBookingDialogOpen(true)}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Nueva Reserva
+          </Button>
+        </CardHeader>
+        <CardContent>
+          <DataTable columns={columns} data={data} />
+        </CardContent>
+      </Card>
+    </>
   )
 }
