@@ -159,9 +159,13 @@ export function NewBookingDialog({
                         value={
                           field.value ? format(field.value, "yyyy-MM-dd") : ""
                         }
-                        onChange={(e) => {
-                          field.onChange(e.target.valueAsDate)
-                        }}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value
+                              ? new Date(`${e.target.value}T00:00:00`)
+                              : null
+                          )
+                        }
                         onBlur={field.onBlur}
                         name={field.name}
                         ref={field.ref}
@@ -183,9 +187,13 @@ export function NewBookingDialog({
                         value={
                           field.value ? format(field.value, "yyyy-MM-dd") : ""
                         }
-                        onChange={(e) => {
-                          field.onChange(e.target.valueAsDate)
-                        }}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value
+                              ? new Date(`${e.target.value}T00:00:00`)
+                              : null
+                          )
+                        }
                         onBlur={field.onBlur}
                         name={field.name}
                         ref={field.ref}
