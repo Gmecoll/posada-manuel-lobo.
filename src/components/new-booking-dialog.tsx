@@ -1,12 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
-import { CalendarIcon } from "lucide-react"
 import { format } from "date-fns"
-import { es } from "date-fns/locale"
 
 import {
   Dialog,
@@ -32,8 +30,6 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { cn } from "@/lib/utils"
 import type { Room } from "@/lib/data"
 import { Input } from "./ui/input"
 
@@ -71,10 +67,6 @@ export function NewBookingDialog({
   onSave,
   rooms,
 }: NewBookingDialogProps) {
-  const [showCalendarFor, setShowCalendarFor] = useState<
-    "checkIn" | "checkOut" | null
-  >(null)
-
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingSchema),
     defaultValues: {
@@ -92,18 +84,11 @@ export function NewBookingDialog({
         checkInDate: undefined,
         checkOutDate: undefined,
       })
-      setShowCalendarFor(null)
     }
   }, [isOpen, form])
 
   const onSubmit = (data: NewBookingData) => {
     onSave(data)
-  }
-
-  const handleDateSelect = (date: Date | undefined) => {
-    if (!showCalendarFor || !date) return
-    form.setValue(showCalendarFor, date, { shouldValidate: true })
-    setShowCalendarFor(null)
   }
 
   return (
@@ -140,10 +125,7 @@ export function NewBookingDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Habitación</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccione una habitación disponible" />
@@ -169,29 +151,21 @@ export function NewBookingDialog({
                 control={form.control}
                 name="checkInDate"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Check-in</FormLabel>
                     <FormControl>
-                      <Button
-                        type="button"
-                        variant={"outline"}
-                        className={cn(
-                          "pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                        onClick={() =>
-                          setShowCalendarFor(
-                            showCalendarFor === "checkIn" ? null : "checkIn"
-                          )
+                      <Input
+                        type="date"
+                        value={
+                          field.value ? format(field.value, "yyyy-MM-dd") : ""
                         }
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP", { locale: es })
-                        ) : (
-                          <span>Elige una fecha</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
+                        onChange={(e) => {
+                          field.onChange(e.target.valueAsDate)
+                        }}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -201,54 +175,41 @@ export function NewBookingDialog({
                 control={form.control}
                 name="checkOutDate"
                 render={({ field }) => (
-                  <FormItem className="flex flex-col">
+                  <FormItem>
                     <FormLabel>Check-out</FormLabel>
                     <FormControl>
-                      <Button
-                        type="button"
-                        variant={"outline"}
-                        className={cn(
-                          "pl-3 text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                        onClick={() =>
-                          setShowCalendarFor(
-                            showCalendarFor === "checkOut" ? null : "checkOut"
-                          )
+                      <Input
+                        type="date"
+                        value={
+                          field.value ? format(field.value, "yyyy-MM-dd") : ""
                         }
-                      >
-                        {field.value ? (
-                          format(field.value, "PPP", { locale: es })
-                        ) : (
-                          <span>Elige una fecha</span>
-                        )}
-                        <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
-                      </Button>
+                        onChange={(e) => {
+                          field.onChange(e.target.valueAsDate)
+                        }}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                        min={
+                          form.watch("checkInDate")
+                            ? format(
+                                new Date(
+                                  form
+                                    .watch("checkInDate")
+                                    .setDate(
+                                      form.watch("checkInDate").getDate() + 1
+                                    )
+                                ),
+                                "yyyy-MM-dd"
+                              )
+                            : ""
+                        }
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
-
-            {showCalendarFor && (
-              <div className="rounded-md border">
-                <Calendar
-                  mode="single"
-                  selected={form.getValues(showCalendarFor)}
-                  onSelect={handleDateSelect}
-                  disabled={
-                    showCalendarFor === "checkIn"
-                      ? (date) =>
-                          date < new Date(new Date().setHours(0, 0, 0, 0))
-                      : (date) =>
-                          !form.getValues("checkInDate") ||
-                          date <= form.getValues("checkInDate")
-                  }
-                  initialFocus
-                />
-              </div>
-            )}
 
             <FormField
               control={form.control}
