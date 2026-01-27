@@ -123,35 +123,7 @@ export function NewBookingDialog({
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="roomId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Habitación</FormLabel>
-                  <Select
-                    onValueChange={field.onChange}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccione una habitación disponible" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {rooms
-                        .filter((room) => room.status === "Disponible")
-                        .map((room) => (
-                          <SelectItem key={room.id} value={room.id}>
-                            Habitación {room.roomNumber} ({room.type})
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Campo de habitación eliminado temporalmente para depuración */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -179,7 +151,7 @@ export function NewBookingDialog({
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent 
-                        className="w-auto p-0 z-[100]" 
+                        className="w-auto p-0 z-[9999]" 
                         align="start"
                         onOpenAutoFocus={(e) => e.preventDefault()}
                       >
@@ -226,7 +198,7 @@ export function NewBookingDialog({
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent 
-                        className="w-auto p-0 z-[100]" 
+                        className="w-auto p-0 z-[9999]" 
                         align="start"
                         onOpenAutoFocus={(e) => e.preventDefault()}
                       >
