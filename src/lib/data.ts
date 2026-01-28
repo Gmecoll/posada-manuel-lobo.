@@ -40,7 +40,7 @@ export const rooms: Room[] = [
   { id: 'room-1', roomNumber: '1', type: 'Standard', status: 'Ocupada', nfcCode: '04 f2 3a 9c' },
   { id: 'room-2', roomNumber: '2', type: 'Deluxe', status: 'Ocupada', nfcCode: '1a 8c b3 2e' },
   { id: 'room-3', roomNumber: '3', type: 'Suite', status: 'Limpieza', nfcCode: 'b6 2d 7f 4a' },
-  { id: 'room-4', roomNumber: '4', type: 'Standard', status: 'Disponible', nfcCode: '0e 6d ee 08' },
+  { id: 'room-4', roomNumber: '4', type: 'Standard', status: 'Disponible', nfcCode: '30 96 9d a7' },
   { id: 'room-5', roomNumber: '5', type: 'Deluxe', status: 'Ocupada', nfcCode: 'c3 99 1e 5f' },
   { id: 'room-6', roomNumber: '6', type: 'Standard', status: 'Disponible', nfcCode: 'd7 a1 8b 6c' },
   { id: 'room-7', roomNumber: '7', type: 'Standard', status: 'Disponible', nfcCode: 'e9 45 2c 7d' },
