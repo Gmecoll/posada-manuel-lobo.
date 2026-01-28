@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -81,6 +82,7 @@ export default function RoomsPage() {
         type: room.type,
         status: room.status,
         remoteUnlock: null,
+        nfcCode: room.nfcCode,
       })
     })
 
@@ -147,14 +149,14 @@ export default function RoomsPage() {
                   {room.status}
                 </Badge>
               </CardContent>
-              <CardFooter>
+              <CardFooter className="flex-col items-start gap-4">
                 <Select
                   value={room.status}
                   onValueChange={(newStatus: RoomStatus) =>
                     handleStatusChange(room.id, newStatus)
                   }
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="Cambiar estado" />
                   </SelectTrigger>
                   <SelectContent>
@@ -163,6 +165,12 @@ export default function RoomsPage() {
                     <SelectItem value="Limpieza">Limpieza</SelectItem>
                   </SelectContent>
                 </Select>
+                {room.nfcCode && (
+                  <div className="pt-2">
+                    <p className="text-xs text-muted-foreground">Código NFC</p>
+                    <p className="font-mono text-sm font-semibold">{room.nfcCode}</p>
+                  </div>
+                )}
               </CardFooter>
             </Card>
           ))}
