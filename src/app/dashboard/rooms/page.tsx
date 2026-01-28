@@ -83,6 +83,7 @@ export default function RoomsPage() {
         status: room.status,
         remoteUnlock: null,
         nfcCode: room.nfcCode,
+        tuya_device_id: room.tuya_device_id,
       })
     })
 
