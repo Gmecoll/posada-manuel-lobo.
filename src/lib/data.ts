@@ -24,6 +24,7 @@ export type Booking = {
   checkOutDate: string;
   status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled';
   access_enabled: boolean;
+  nfcCode?: string;
 };
 
 export const guests: Guest[] = [
@@ -60,6 +61,7 @@ export const bookings: Booking[] = [
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString().split('T')[0],
     status: 'Checked-In',
     access_enabled: true,
+    nfcCode: '04 f2 3a 9c',
   },
   {
     id: 'booking-2',
@@ -71,6 +73,7 @@ export const bookings: Booking[] = [
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().split('T')[0],
     status: 'Confirmed',
     access_enabled: false,
+    nfcCode: '1a 8c b3 2e',
   },
   {
     id: 'booking-3',
@@ -82,6 +85,7 @@ export const bookings: Booking[] = [
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
     status: 'Confirmed',
     access_enabled: true,
+    nfcCode: 'f1 5b 9d 8e',
   },
   {
     id: 'booking-4',
@@ -93,6 +97,7 @@ export const bookings: Booking[] = [
     checkOutDate: new Date(new Date().setDate(new Date().getDate() + 4)).toISOString().split('T')[0],
     status: 'Confirmed',
     access_enabled: false,
+    nfcCode: 'c3 99 1e 5f',
   },
   {
     id: 'booking-5',
@@ -104,6 +109,7 @@ export const bookings: Booking[] = [
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0],
     status: 'Checked-Out',
     access_enabled: false,
+    nfcCode: '04 f2 3a 9c',
   },
   {
     id: 'booking-6',
@@ -115,5 +121,6 @@ export const bookings: Booking[] = [
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     status: 'Cancelled',
     access_enabled: false,
+    nfcCode: '30 96 9d a7',
   },
 ];

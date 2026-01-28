@@ -73,6 +73,7 @@ export default function BookingsPage() {
           checkOutDate: docData.checkOutDate,
           status: docData.status,
           access_enabled: docData.access_enabled,
+          nfcCode: docData.nfcCode,
         } as Booking
       })
 
@@ -176,7 +177,9 @@ export default function BookingsPage() {
 
   const handleDelete = useCallback(
     async (booking: BookingWithDetails) => {
-      if (!booking) return
+      if (!confirm("¿Estás seguro de que quieres eliminar esta reserva?")) {
+        return
+      }
 
       const bookingRef = doc(db, "bookings", booking.id)
       try {
@@ -242,6 +245,7 @@ export default function BookingsPage() {
         checkOutDate: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,
         access_enabled: bookingData.status === "Checked-In",
+        nfcCode: matchedRoom.nfcCode,
       }
 
       if (isEditing && bookingToEdit) {
