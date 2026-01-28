@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -170,6 +169,12 @@ export default function RoomsPage() {
                   <div className="pt-2">
                     <p className="text-xs text-muted-foreground">Código NFC</p>
                     <p className="font-mono text-sm font-semibold">{room.nfcCode}</p>
+                  </div>
+                )}
+                {room.tuya_device_id && (
+                  <div className="pt-2">
+                    <p className="text-xs text-muted-foreground">Tuya Device ID</p>
+                    <p className="font-mono text-sm font-semibold">{room.tuya_device_id}</p>
                   </div>
                 )}
               </CardFooter>
