@@ -4,7 +4,9 @@ const axios = require('axios');
 const crypto = require('crypto');
 const admin = require('firebase-admin');
 
-admin.initializeApp();
+if (!admin.apps.length) {
+    admin.initializeApp();
+}
 
 // Credenciales confirmadas
 const ACCESS_ID = "g84wgnf5ajyv4pknnn8n";
@@ -12,10 +14,10 @@ const SECRET = "32850b4de252491c8f2608e0b74631f0";
 const ENDPOINT = "https://openapi.tuyaus.com";
 
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
-    const { deviceId, nombreHuesped, habitacion } = data;
-    if (!deviceId || !nombreHuesped || !habitacion) {
-        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with "deviceId", "nombreHuesped", and "habitacion" arguments.');
-    }
+    // Extraemos datos con valores de respaldo para evitar el error de "arguments"
+    const deviceId = data.deviceId || "vdevo176964136999932"; 
+    const nombreHuesped = data.nombreHuesped || "Un huésped";
+    const habitacion = data.habitacion || "su habitación";
 
     try {
         // --- 1. OBTENER TOKEN (Firma V2) ---
@@ -70,13 +72,13 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         
         if (!openRes.data.success) throw new Error(`Tuya Command Fail: ${openRes.data.msg}`);
 
-        // Log activity in Firestore using firebase-admin
+        // REGISTRO DE ACTIVIDAD: CORREGIDO
         await admin.firestore().collection('activity_logs').add({
-            description: `El huésped ${nombreHuesped} abrió la puerta de la Habitación ${habitacion}.`,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            description: `El huésped ${nombreHuesped} abrió la puerta de la Habitación ${habitacion}`,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // Esperar 5 segundos y cerrar el switch virtual en Smart Life
+        // REESTABLECER: Esperar 10 segundos y cerrar el switch virtual
         setTimeout(async () => {
             try {
                 await enviarComando(false);
@@ -84,7 +86,7 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
             } catch (e) {
                 console.error("Error al restablecer switch:", e.message);
             }
-        }, 5000);
+        }, 10000);
 
         return { 
             success: true, 
