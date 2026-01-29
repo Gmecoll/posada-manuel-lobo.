@@ -42,7 +42,7 @@ export const rooms: Room[] = [
   { id: 'room-1', room_number: '1', type: 'Standard', status: 'Ocupada', nfcCode: '04 f2 3a 9c', tuya_device_id: 'XXXX' },
   { id: 'room-2', room_number: '2', type: 'Deluxe', status: 'Ocupada', nfcCode: '1a 8c b3 2e', tuya_device_id: 'XXXX' },
   { id: 'room-3', room_number: '3', type: 'Suite', status: 'Limpieza', nfcCode: 'b6 2d 7f 4a', tuya_device_id: 'XXXX' },
-  { id: 'room-4', room_number: '4', type: 'Standard', status: 'Disponible', nfcCode: '30 96 9d a7', tuya_device_id: 'kajxpa5eoyvbxlmt' },
+  { id: 'room-4', room_number: '4', type: 'Standard', status: 'Disponible', nfcCode: '30 96 9d a7', tuya_device_id: 'vdevo176964136999932' },
   { id: 'room-5', room_number: '5', type: 'Deluxe', status: 'Ocupada', nfcCode: 'c3 99 1e 5f', tuya_device_id: 'XXXX' },
   { id: 'room-6', room_number: '6', type: 'Standard', status: 'Disponible', nfcCode: 'd7 a1 8b 6c', tuya_device_id: 'XXXX' },
   { id: 'room-7', room_number: '7', type: 'Standard', status: 'Disponible', nfcCode: 'e9 45 2c 7d', tuya_device_id: 'XXXX' },
