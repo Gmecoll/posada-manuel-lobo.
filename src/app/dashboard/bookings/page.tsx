@@ -32,16 +32,6 @@ import {
 } from "@/components/new-booking-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { format, parse } from "date-fns"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 
 export default function BookingsPage() {
   const [data, setData] = useState<BookingWithDetails[]>([])
@@ -50,9 +40,6 @@ export default function BookingsPage() {
   const [bookingToEdit, setBookingToEdit] =
     useState<BookingWithDetails | null>(null)
   const [qrCodeBooking, setQrCodeBooking] =
-    useState<BookingWithDetails | null>(null)
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [bookingToDelete, setBookingToDelete] =
     useState<BookingWithDetails | null>(null)
 
   const { toast } = useToast()
@@ -188,38 +175,32 @@ export default function BookingsPage() {
     setIsBookingDialogOpen(true)
   }, [])
 
-  const handleDeleteConfirm = useCallback(async () => {
-    if (!bookingToDelete) return
+  const handleDelete = useCallback(async (booking: BookingWithDetails) => {
+    if (!window.confirm(`¿Está seguro de que desea eliminar la reserva de ${booking.guest_name}?`)) {
+      return;
+    }
 
-    const bookingRef = doc(db, "bookings", bookingToDelete.id)
+    const bookingRef = doc(db, "bookings", booking.id);
     try {
-      if (bookingToDelete.status === "Checked-In") {
-        const roomRef = doc(db, "rooms", bookingToDelete.roomId)
-        await updateDoc(roomRef, { status: "Disponible" })
+      if (booking.status === "Checked-In") {
+        const roomRef = doc(db, "rooms", booking.roomId);
+        await updateDoc(roomRef, { status: "Disponible" });
       }
 
-      await deleteDoc(bookingRef)
+      await deleteDoc(bookingRef);
       toast({
         title: "Reserva Eliminada",
         description: "La reserva ha sido eliminada exitosamente.",
-      })
+      });
     } catch (error) {
-      console.error("Error deleting booking:", error)
+      console.error("Error deleting booking:", error);
       toast({
         variant: "destructive",
         title: "Error",
         description: "No se pudo eliminar la reserva.",
-      })
-    } finally {
-      setIsDeleteDialogOpen(false)
-      setBookingToDelete(null)
+      });
     }
-  }, [bookingToDelete, toast])
-
-  const handleDelete = useCallback((booking: BookingWithDetails) => {
-    setBookingToDelete(booking)
-    setIsDeleteDialogOpen(true)
-  }, [])
+  }, [toast]);
 
   const handleShowQr = useCallback((booking: BookingWithDetails) => {
     setQrCodeBooking(booking)
@@ -335,38 +316,6 @@ export default function BookingsPage() {
         booking={qrCodeBooking}
         room={qrCodeBooking?.room ?? null}
       />
-
-      <AlertDialog
-        open={isDeleteDialogOpen}
-        onOpenChange={setIsDeleteDialogOpen}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Esta acción no se puede deshacer. Esto eliminará permanentemente la
-              reserva de{" "}
-              <span className="font-semibold">{bookingToDelete?.guest_name}</span>{" "}
-              para la habitación{" "}
-              <span className="font-semibold">
-                {bookingToDelete?.room.roomNumber}
-              </span>
-              .
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setBookingToDelete(null)}>
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={handleDeleteConfirm}
-            >
-              Eliminar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
