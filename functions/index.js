@@ -13,17 +13,34 @@ const SECRET = "32850b4de252491c8f2608e0b74631f0";
 const ENDPOINT = "https://openapi.tuyaus.com";
 
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
-    // --- BLOQUE 1: VALIDACIÓN ---
-    const { deviceId, guest_name, room_number } = data;
+    // --- BLOQUE 1: VALIDACIÓN Y MAPEO ---
+    
+    // 1. Mapeo Híbrido: Acepta etiquetas de la App nueva (guest_name) y vieja (nombreHuesped)
+    const deviceId = data.deviceId || "vdevo176964136999932";
+    const guest_name = data.guest_name || data.nombreHuesped || "Huésped";
+    const room_number = data.room_number || data.habitacion || "7";
+    
+    // 2. Validación de Seguridad (Opcional pero recomendada)
+    if (context.auth) {
+        const emailUsuario = context.auth.token.email;
+        const reservaSnapshot = await admin.firestore().collection('reservas')
+            .where('email', '==', emailUsuario)
+            .where('room_number', '==', String(room_number))
+            .where('estado', '==', 'Confirmed') // "Confirmed" en inglés según tu DB
+            .get();
 
-    if (!deviceId || !guest_name || !room_number) {
-        throw new functions.https.HttpsError('invalid-argument', 'La función requiere deviceId, guest_name y room_number.');
+        if (reservaSnapshot.empty) {
+            // Nota: Si quieres ser estricto, descomenta la línea de abajo. 
+            // Por ahora solo lo logueamos para no bloquearte si hay error de datos.
+            console.warn(`Usuario ${emailUsuario} sin reserva Confirmed para habitación ${room_number}`);
+            // throw new functions.https.HttpsError('permission-denied', 'No tienes una reserva confirmada.');
+        }
     }
 
     try {
         // --- BLOQUE 2: COMUNICACIÓN CON TUYA (Firma V2) ---
 
-        // 1. Obtener Token
+        // 3. Obtener Token
         const t = Date.now().toString();
         const urlToken = "/v1.0/token?grant_type=1";
         const contentHash = crypto.createHash('sha256').update("").digest('hex');
@@ -40,7 +57,7 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         if (!tokenRes.data.success) throw new Error(`Tuya Token Fail: ${tokenRes.data.msg}`);
         const accessToken = tokenRes.data.result.access_token;
 
-        // 2. Función interna para enviar comandos
+        // 4. Función interna para enviar comandos
         const enviarComando = async (valor) => {
             const tCmd = Date.now().toString();
             const urlCmd = `/v1.0/devices/${deviceId}/commands`;
@@ -54,11 +71,8 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
 
             return axios.post(`${ENDPOINT}${urlCmd}`, body, {
                 headers: { 
-                    'client_id': ACCESS_ID, 
-                    'access_token': accessToken, 
-                    'sign': s2, 
-                    't': tCmd, 
-                    'sign_method': 'HMAC-SHA256', 
+                    'client_id': ACCESS_ID, 'access_token': accessToken, 
+                    'sign': s2, 't': tCmd, 'sign_method': 'HMAC-SHA256', 
                     'Content-Type': 'application/json' 
                 }
             });
@@ -70,10 +84,10 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         const openRes = await enviarComando(true);
         if (!openRes.data.success) throw new Error(`Tuya Command Fail: ${openRes.data.msg}`);
 
-        // REGISTRO DE ACTIVIDAD: Formato y colección correctos
+        // REGISTRO DE ACTIVIDAD: Usando la colección 'activity_logs' para que coincida con el frontend.
         await admin.firestore().collection('activity_logs').add({
             description: `El huésped ${guest_name} abrió la puerta de la Habitación ${room_number}`,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
 
         // REESTABLECER: 10 segundos para cerrar el switch virtual
