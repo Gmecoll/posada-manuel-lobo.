@@ -50,14 +50,28 @@ export const getColumns = ({
     accessorKey: "guest_name",
     header: "Huésped",
     cell: ({ row }) => {
-      return <div className="font-medium">{row.original.guest_name}</div>
+      const guestName = row.original.guest_name
+      return (
+        <div className="font-medium">
+          {guestName || (
+            <span className="text-muted-foreground">No disponible</span>
+          )}
+        </div>
+      )
     },
   },
   {
     accessorKey: "booking_id",
     header: "ID Cloudbeds",
     cell: ({ row }) => {
-      return <div className="font-medium">{row.original.booking_id}</div>
+      const bookingId = row.original.booking_id
+      return (
+        <div className="font-medium">
+          {bookingId || (
+            <span className="text-muted-foreground">No disponible</span>
+          )}
+        </div>
+      )
     },
   },
   {
