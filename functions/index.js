@@ -14,7 +14,7 @@ const ACCESS_ID = "g84wgnf5ajyv4pknnn8n";
 const SECRET = "32850b4de252491c8f2608e0b74631f0";
 const ENDPOINT = "https://openapi.tuyaus.com";
 
-// --- FUNCIÓN 1: APERTURA (onCall v2) ---
+// --- FUNCIÓN 1: APERTURA INTELIGENTE (onCall v2) ---
 exports.solicitarAperturaTuya = onCall(async (request) => {
     const data = request.data;
     const db = admin.firestore();
@@ -24,6 +24,7 @@ exports.solicitarAperturaTuya = onCall(async (request) => {
     }
 
     try {
+        // Buscamos la habitación por número para obtener el ID real de la base de datos
         const snapshot = await db.collection('rooms')
             .where('room_number', '==', data.room_number)
             .limit(1).get();
@@ -35,6 +36,7 @@ exports.solicitarAperturaTuya = onCall(async (request) => {
         const roomData = snapshot.docs[0].data();
         const verifiedDeviceId = roomData.tuya_device_id;
 
+        // Si el ID es inválido o XXXX, forzamos el error para activar el Plan B en la App
         if (!verifiedDeviceId || verifiedDeviceId === 'XXXX') {
             await db.collection('activity_logs').add({
                 description: `Apertura denegada (Hab. ${data.room_number}): sin llave configurada.`,
@@ -44,8 +46,7 @@ exports.solicitarAperturaTuya = onCall(async (request) => {
             throw new functions.https.HttpsError('failed-precondition', 'Habitación sin llave configurada');
         }
 
-
-        // Lógica Tuya
+        // --- Lógica Tuya ---
         const t = Date.now().toString();
         const urlToken = "/v1.0/token?grant_type=1";
         const contentHashEmpty = crypto.createHash('sha256').update("").digest('hex');
@@ -71,129 +72,48 @@ exports.solicitarAperturaTuya = onCall(async (request) => {
         if (resCmd.data.success) {
             return { success: true };
         } else {
-             await db.collection('activity_logs').add({
-                description: `Error de API Tuya (Hab. ${data.room_number}): ${resCmd.data.msg}`,
-                timestamp: admin.firestore.FieldValue.serverTimestamp(),
-                success: false
-            });
             throw new Error(resCmd.data.msg);
         }
     } catch (error) {
         if (error instanceof functions.https.HttpsError) throw error;
-        await db.collection('activity_logs').add({
-            description: `Error interno en apertura (Hab. ${data.room_number}): ${error.message}`,
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            success: false
-        });
         throw new functions.https.HttpsError('internal', error.message);
     }
 });
 
-
-// --- FUNCIÓN 2: ROTACIÓN CÓDIGO EMERGENCIA (onSchedule v2) ---
-exports.rotarCodigoEmergencia = onSchedule("every 30 minutes", async (event) => {
+// --- FUNCIÓN 2: ROTACIÓN DE CÓDIGO (onSchedule v2 cada 30 min) ---
+exports.mantenimientoHabitaciones = onSchedule("every 30 minutes", async (event) => {
     const db = admin.firestore();
+
     try {
-        const snapshot = await db.collection('rooms').get();
+        const roomsSnapshot = await db.collection('rooms').get();
         const batch = db.batch();
         let count = 0;
 
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            if (data.codes_pool && Array.isArray(data.codes_pool) && data.codes_pool.length > 0) {
-                const randomCode = data.codes_pool[Math.floor(Math.random() * data.codes_pool.length)];
-                batch.update(doc.ref, {
-                    backup_code: randomCode,
-                    last_rotation: admin.firestore.FieldValue.serverTimestamp()
-                });
+        roomsSnapshot.forEach(roomDoc => {
+            const roomData = roomDoc.data();
+            let updates = {};
+
+            // 1. ROTACIÓN DE CÓDIGO (Plan B)
+            if (roomData.codes_pool && Array.isArray(roomData.codes_pool) && roomData.codes_pool.length > 0) {
+                const randomCode = roomData.codes_pool[Math.floor(Math.random() * roomData.codes_pool.length)];
+                updates.backup_code = randomCode;
+                updates.last_rotation = admin.firestore.FieldValue.serverTimestamp();
+            }
+            
+            // Si hay algo que actualizar, lo añadimos al batch
+            if (Object.keys(updates).length > 0) {
+                batch.update(roomDoc.ref, updates);
                 count++;
             }
         });
 
-        if (count > 0) await batch.commit();
-        console.log(`Rotación de códigos exitosa: ${count} habitaciones actualizadas.`);
+        if (count > 0) {
+            await batch.commit();
+            console.log(`Mantenimiento completado: ${count} códigos de emergencia rotados.`);
+        }
+        return null;
     } catch (err) {
-        console.error("Error en la rotación de códigos de emergencia:", err);
-    }
-});
-
-
-// --- FUNCIÓN 3: ACTUALIZACIÓN ESTADO HABITACIONES (onSchedule v2) ---
-exports.actualizarEstadoHabitaciones = onSchedule("every 30 minutes", async (event) => {
-    const db = admin.firestore();
-    const now = new Date();
-    // Use UTC date for comparisons to ensure consistency on the server
-    const todayStr = now.toISOString().split('T')[0];
-
-    try {
-        const bookingsSnapshot = await db.collection('bookings').get();
-        const roomsSnapshot = await db.collection('rooms').get();
-
-        // --- Step 1: Auto check-out guests whose check-out date has passed ---
-        const checkoutBatch = db.batch();
-        let checkedOutCount = 0;
-        for (const doc of bookingsSnapshot.docs) {
-            const booking = doc.data();
-            // Using < todayStr ensures check-out happens on the day *after* checkout date.
-            if (booking.status === 'Checked-In' && booking.checkOutDate < todayStr) {
-                checkoutBatch.update(doc.ref, { status: 'Checked-Out', access_enabled: false });
-                checkedOutCount++;
-            }
-        }
-        if (checkedOutCount > 0) {
-            await checkoutBatch.commit();
-            console.log(`Auto check-out: ${checkedOutCount} reservas actualizadas a 'Checked-Out'.`);
-        }
-
-        // --- Step 2: Determine new status for each room based on fresh booking data ---
-        // Get fresh data after potential check-outs
-        const freshBookingsSnapshot = await db.collection('bookings').get();
-        const allBookings = freshBookingsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        const updateBatch = db.batch();
-        let updatesCount = 0;
-
-        for (const roomDoc of roomsSnapshot.docs) {
-            const room = roomDoc.data();
-            const roomId = roomDoc.id;
-
-            // Rule for 'Ocupada'
-            const isOccupied = allBookings.some(b =>
-                b.roomId === roomId &&
-                (b.status === 'Checked-In' || b.status === 'Confirmed') &&
-                b.checkInDate <= todayStr &&
-                b.checkOutDate >= todayStr
-            );
-
-            // Rule for 'Limpieza'
-            const isForCleaning = allBookings.some(b =>
-                b.roomId === roomId &&
-                b.checkOutDate === todayStr &&
-                (b.status === 'Checked-Out' || b.status === 'Checked-In')
-            );
-            
-            let newStatus = 'Disponible';
-            if (isOccupied) {
-                newStatus = 'Ocupada';
-            } else if (isForCleaning) {
-                newStatus = 'Limpieza';
-            }
-
-            if (room.status !== newStatus) {
-                const roomRef = db.collection('rooms').doc(roomId);
-                updateBatch.update(roomRef, { status: newStatus });
-                updatesCount++;
-            }
-        }
-       
-        if (updatesCount > 0) {
-            await updateBatch.commit();
-            console.log(`Actualización automática de estado: ${updatesCount} habitaciones actualizadas.`);
-        } else {
-             console.log('No se requirieron actualizaciones de estado de habitaciones.');
-        }
-
-    } catch (err) {
-        console.error("Error en la rutina de actualización de estado de habitaciones:", err);
+        console.error("Error en mantenimiento de códigos:", err);
+        return null;
     }
 });
