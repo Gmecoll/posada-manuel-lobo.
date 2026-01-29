@@ -11,15 +11,16 @@ const SECRET = "32850b4de252491c8f2608e0b74631f0";
 const ENDPOINT = "https://openapi.tuyaus.com";
 
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
-    // 1. Validar que el deviceId existe antes que nada.
-    if (!data.tuya_device_id) {
-        throw new functions.https.HttpsError('not-found', 'Esta habitación no tiene una cerradura vinculada (falta deviceId)');
+    // REGLA DE SEGURIDAD ESTRICTA:
+    // Validar que el tuya_device_id es válido antes de hacer nada más.
+    if (!data.tuya_device_id || data.tuya_device_id === 'XXXX') {
+        throw new functions.https.HttpsError('failed-precondition', 'Esta habitación no tiene una llave digital configurada');
     }
     
     // Si la validación es exitosa, se procede con el registro de actividad.
     const db = admin.firestore();
     const logData = {
-        description: `Intento Acceso - Hab ${data.room_number || 'N/A'} por ${data.guest_name || 'Desconocido'}`,
+        description: `Intento de acceso a Hab. ${data.room_number || 'N/A'} por ${data.guest_name || 'Desconocido'}`,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         details: {
             guest: data.guest_name || 'Desconocido',
@@ -29,7 +30,7 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
     };
     await db.collection('activity_logs').add(logData);
 
-    // 2. Envolver la lógica de Tuya en un try/catch para manejar errores de conexión.
+    // Envolver la lógica de Tuya en un try/catch para manejar errores de conexión.
     try {
         const t = Date.now().toString();
         
@@ -46,7 +47,7 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         });
 
         if (!resToken.data.success) {
-            throw new Error(`Token Error: ${resToken.data.msg}`);
+            throw new Error(`Error de Token Tuya: ${resToken.data.msg}`);
         }
         const token = resToken.data.result.access_token;
 
@@ -77,11 +78,11 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         if (resCmd.data.success) {
             return { success: true, status: "Puerta virtual abierta (door_opened: true)" };
         } else {
-            throw new Error(`Tuya dice: ${resCmd.data.msg} (Código: ${resCmd.data.code})`);
+            throw new Error(`Error de Comando Tuya: ${resCmd.data.msg} (Código: ${resCmd.data.code})`);
         }
 
     } catch (error) {
-        // 'aborted' o 'internal' asegura que el mensaje llegue a la UI sin ser genérico.
+        // Captura cualquier error (conexión, token, comando) y lo devuelve a la app.
         throw new functions.https.HttpsError('internal', error.message);
     }
 });
