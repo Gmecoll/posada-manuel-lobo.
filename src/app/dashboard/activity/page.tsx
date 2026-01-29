@@ -1,8 +1,9 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore"
-import { formatDistanceToNow } from "date-fns"
+import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { History } from "lucide-react"
 
@@ -63,9 +64,9 @@ export default function ActivityPage() {
   }, [])
 
   const formatTimestamp = (timestamp: ActivityLog["timestamp"]) => {
-    if (!timestamp) return "hace un momento"
+    if (!timestamp) return "Fecha no disponible"
     const date = new Date(timestamp.seconds * 1000)
-    return formatDistanceToNow(date, { locale: es, addSuffix: true })
+    return format(date, "dd/MM/yyyy, HH:mm 'hs'", { locale: es })
   }
 
   return (
@@ -92,7 +93,7 @@ export default function ActivityPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Descripción</TableHead>
-                <TableHead className="w-[180px] text-right">Cuándo</TableHead>
+                <TableHead className="w-[200px] text-right">Cuándo</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
