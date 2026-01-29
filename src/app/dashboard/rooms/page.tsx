@@ -83,7 +83,7 @@ export default function RoomsPage() {
         status: room.status,
         remoteUnlock: null,
         nfcCode: room.nfcCode,
-        deviceId: room.deviceId,
+        tuya_device_id: room.tuya_device_id,
       })
     })
 
@@ -172,10 +172,10 @@ export default function RoomsPage() {
                     <p className="font-mono text-sm font-semibold">{room.nfcCode}</p>
                   </div>
                 )}
-                {room.deviceId && (
+                {room.tuya_device_id && (
                   <div className="pt-2">
-                    <p className="text-xs text-muted-foreground">Device ID</p>
-                    <p className="font-mono text-sm font-semibold">{room.deviceId}</p>
+                    <p className="text-xs text-muted-foreground">Tuya Device ID</p>
+                    <p className="font-mono text-sm font-semibold">{room.tuya_device_id}</p>
                   </div>
                 )}
               </CardFooter>

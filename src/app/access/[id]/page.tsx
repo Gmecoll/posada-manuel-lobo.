@@ -30,7 +30,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
   const handleUnlock = useCallback(async () => {
     if (!booking || !room || isUnlocking) return
 
-    if (!room.deviceId || room.deviceId === "XXXX") {
+    if (!room.tuya_device_id || room.tuya_device_id === "XXXX") {
       setUnlockMessage("Cerradura no configurada.")
       setTimeout(
         () => setUnlockMessage("Pulsa el botón para desbloquear la puerta."),
@@ -47,7 +47,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
 
     try {
       const result = await solicitarApertura({ 
-        deviceId: room.deviceId,
+        tuya_device_id: room.tuya_device_id,
         guest_name: booking.guest_name,
         room_number: room.room_number,
       })
@@ -64,9 +64,9 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
       } else {
         throw new Error("La API de Tuya no pudo abrir la puerta.")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error al abrir la puerta:", error)
-      setUnlockMessage("Error al abrir. Intente de nuevo.")
+      setUnlockMessage(error.message || "Error al abrir. Intente de nuevo.")
       setTimeout(() => {
         setUnlockMessage("Pulsa el botón para desbloquear la puerta.")
       }, 4000)
