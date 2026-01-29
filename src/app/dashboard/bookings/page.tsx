@@ -73,7 +73,6 @@ export default function BookingsPage() {
           checkOutDate: docData.checkOutDate,
           status: docData.status,
           access_enabled: docData.access_enabled,
-          nfcCode: docData.nfcCode,
         } as Booking
       })
 
@@ -238,7 +237,6 @@ export default function BookingsPage() {
         checkOutDate: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,
         access_enabled: bookingData.status === "Checked-In",
-        nfcCode: matchedRoom.nfcCode,
       }
 
       if (isEditing && bookingToEdit) {
@@ -294,7 +292,9 @@ export default function BookingsPage() {
       <NewBookingDialog
         isOpen={isBookingDialogOpen}
         onOpenChange={(open) => {
-          if (!open) setBookingToEdit(null)
+          if (!open) {
+            setBookingToEdit(null)
+          }
           setIsBookingDialogOpen(open)
         }}
         onSave={handleSaveBooking}

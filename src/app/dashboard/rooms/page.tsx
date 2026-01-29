@@ -82,7 +82,6 @@ export default function RoomsPage() {
         type: room.type,
         status: room.status,
         remoteUnlock: null,
-        nfcCode: room.nfcCode,
         tuya_device_id: room.tuya_device_id,
       })
     })
@@ -166,12 +165,6 @@ export default function RoomsPage() {
                     <SelectItem value="Limpieza">Limpieza</SelectItem>
                   </SelectContent>
                 </Select>
-                {room.nfcCode && (
-                  <div className="pt-2">
-                    <p className="text-xs text-muted-foreground">Código NFC</p>
-                    <p className="font-mono text-sm font-semibold">{room.nfcCode}</p>
-                  </div>
-                )}
                 {room.tuya_device_id && (
                   <div className="pt-2">
                     <p className="text-xs text-muted-foreground">Tuya Device ID</p>
