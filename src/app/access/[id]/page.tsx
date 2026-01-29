@@ -48,8 +48,8 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
     try {
       const result = await solicitarApertura({ 
         deviceId: room.tuya_device_id,
-        nombreHuesped: booking.guest_name,
-        habitacion: room.roomNumber,
+        guest_name: booking.guest_name,
+        room_number: room.roomNumber,
       })
       const resultData = result.data as { success: boolean; [key: string]: any }
 

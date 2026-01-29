@@ -1,4 +1,3 @@
-
 const functions = require('firebase-functions');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -8,19 +7,23 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 
-// Credenciales confirmadas
+// Credenciales de la Posada Manuel Lobo
 const ACCESS_ID = "g84wgnf5ajyv4pknnn8n";
 const SECRET = "32850b4de252491c8f2608e0b74631f0";
 const ENDPOINT = "https://openapi.tuyaus.com";
 
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
-    // Extraemos datos con valores de respaldo para evitar el error de "arguments"
-    const deviceId = data.deviceId || "vdevo176964136999932"; 
-    const nombreHuesped = data.nombreHuesped || "Un huésped";
-    const habitacion = data.habitacion || "su habitación";
+    // --- BLOQUE 1: VALIDACIÓN ---
+    const { deviceId, guest_name, room_number } = data;
+
+    if (!deviceId || !guest_name || !room_number) {
+        throw new functions.https.HttpsError('invalid-argument', 'La función requiere deviceId, guest_name y room_number.');
+    }
 
     try {
-        // --- 1. OBTENER TOKEN (Firma V2) ---
+        // --- BLOQUE 2: COMUNICACIÓN CON TUYA (Firma V2) ---
+
+        // 1. Obtener Token
         const t = Date.now().toString();
         const urlToken = "/v1.0/token?grant_type=1";
         const contentHash = crypto.createHash('sha256').update("").digest('hex');
@@ -31,18 +34,13 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
             .digest('hex').toUpperCase();
 
         const tokenRes = await axios.get(`${ENDPOINT}${urlToken}`, {
-            headers: { 
-                'client_id': ACCESS_ID, 
-                'sign': sign, 
-                't': t, 
-                'sign_method': 'HMAC-SHA256' 
-            }
+            headers: { 'client_id': ACCESS_ID, 'sign': sign, 't': t, 'sign_method': 'HMAC-SHA256' }
         });
 
         if (!tokenRes.data.success) throw new Error(`Tuya Token Fail: ${tokenRes.data.msg}`);
         const accessToken = tokenRes.data.result.access_token;
 
-        // --- 2. FUNCIÓN INTERNA PARA ENVIAR COMANDOS ---
+        // 2. Función interna para enviar comandos
         const enviarComando = async (valor) => {
             const tCmd = Date.now().toString();
             const urlCmd = `/v1.0/devices/${deviceId}/commands`;
@@ -66,23 +64,23 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
             });
         };
 
-        // --- 3. EJECUCIÓN ---
-        // Abrir la puerta inmediatamente
+        // --- BLOQUE 3: EJECUCIÓN Y REGISTRO ---
+
+        // Abrir la puerta
         const openRes = await enviarComando(true);
-        
         if (!openRes.data.success) throw new Error(`Tuya Command Fail: ${openRes.data.msg}`);
 
-        // REGISTRO DE ACTIVIDAD: CORREGIDO
+        // REGISTRO DE ACTIVIDAD: Formato y colección correctos
         await admin.firestore().collection('activity_logs').add({
-            description: `El huésped ${nombreHuesped} abrió la puerta de la Habitación ${habitacion}`,
-            timestamp: admin.firestore.FieldValue.serverTimestamp()
+            description: `El huésped ${guest_name} abrió la puerta de la Habitación ${room_number}`,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // REESTABLECER: Esperar 10 segundos y cerrar el switch virtual
+        // REESTABLECER: 10 segundos para cerrar el switch virtual
         setTimeout(async () => {
             try {
                 await enviarComando(false);
-                console.log("Switch virtual restablecido a cerrado");
+                console.log("Switch virtual restablecido a cerrado automáticamente");
             } catch (e) {
                 console.error("Error al restablecer switch:", e.message);
             }
@@ -90,12 +88,12 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
 
         return { 
             success: true, 
-            message: "Puerta abierta correctamente", 
+            message: "Acceso autorizado y puerta abierta", 
             detail: openRes.data 
         };
 
     } catch (error) {
-        console.error("Error en proceso:", error.message);
+        console.error("Error en proceso de apertura:", error.message);
         throw new functions.https.HttpsError('internal', error.message);
     }
 });
