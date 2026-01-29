@@ -111,6 +111,8 @@ export const getColumns = ({
           ? "outline"
           : status === "Cancelled"
           ? "destructive"
+          : status === "Bloqueada"
+          ? "destructive"
           : "secondary"
       return <Badge variant={variant}>{status}</Badge>
     },

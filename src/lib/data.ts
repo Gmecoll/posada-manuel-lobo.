@@ -25,7 +25,7 @@ export type Booking = {
   room_number: string;
   checkInDate: string;
   checkOutDate: string;
-  status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled';
+  status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled' | 'Bloqueada';
   access_enabled: boolean;
 };
 

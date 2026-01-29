@@ -17,32 +17,21 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
 import type { Booking, Room } from "@/lib/data"
 import { db } from "@/firebaseConfig"
+import { BookingRack } from "@/components/booking-rack"
 
 export default function Dashboard() {
   const [bookings, setBookings] = useState<Booking[]>([])
-  const [recentBookings, setRecentBookings] = useState<Booking[]>([])
   const [checkedInCount, setCheckedInCount] = useState(0)
   const [availableRoomsCount, setAvailableRoomsCount] = useState(0)
   const [totalRoomsCount, setTotalRoomsCount] = useState(0)
-  const [allRooms, setAllRooms] = useState<Room[]>([])
 
   // Listen to rooms collection
   useEffect(() => {
     const roomsCol = collection(db, "rooms")
     const unsubscribe = onSnapshot(roomsCol, (snapshot) => {
       const roomsFromDb = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Room[]
-      setAllRooms(roomsFromDb);
       const available = roomsFromDb.filter(
         (room) => room.status === "Disponible"
       ).length
@@ -67,19 +56,13 @@ export default function Dashboard() {
         (b) => b.status === "Checked-In"
       ).length
       setCheckedInCount(checkedIn)
-      
-      const recent = bookingsFromDb
-        .filter((b) => b.status === 'Checked-In' || b.status === 'Confirmed')
-        .sort((a, b) => new Date(b.checkInDate).getTime() - new Date(a.checkInDate).getTime())
-        .slice(0, 5)
-      setRecentBookings(recent)
     })
     return () => unsubscribe()
   }, [])
 
 
   return (
-    <>
+    <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -130,43 +113,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Reservas Recientes</CardTitle>
-          <CardDescription>
-            Un resumen de las últimas actividades de los huéspedes.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID Cloudbeds</TableHead>
-                <TableHead>Habitación</TableHead>
-                <TableHead>Fecha de Check-in</TableHead>
-                <TableHead>Estado</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {recentBookings.map((booking) => {
-                const room = allRooms.find((r) => r.id === booking.roomId)
-                return (
-                  <TableRow key={booking.id}>
-                    <TableCell>
-                      <div className="font-medium">{booking.booking_id}</div>
-                    </TableCell>
-                    <TableCell>Habitación {room?.room_number}</TableCell>
-                    <TableCell>{booking.checkInDate}</TableCell>
-                    <TableCell>
-                      <Badge variant={booking.status === 'Checked-In' ? "default" : "secondary"}>{booking.status}</Badge>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </>
+      
+      <BookingRack />
+
+    </div>
   )
 }

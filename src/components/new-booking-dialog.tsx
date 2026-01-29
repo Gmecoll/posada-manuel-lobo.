@@ -36,10 +36,8 @@ import { Input } from "./ui/input"
 
 const bookingFormSchema = z
   .object({
-    guest_name: z.string().min(3, { message: "El nombre es requerido." }),
-    booking_id: z
-      .string()
-      .min(1, { message: "El ID de Cloudbeds es requerido." }),
+    guest_name: z.string().min(1, { message: "El nombre es requerido." }),
+    booking_id: z.string(),
     roomId: z.string().min(1, { message: "La habitación es requerida." }),
     checkInDate: z
       .string()
@@ -53,7 +51,7 @@ const bookingFormSchema = z
         /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/,
         "El formato de fecha debe ser dd/mm/aaaa."
       ),
-    status: z.enum(["Confirmed", "Checked-In", "Checked-Out", "Cancelled"]),
+    status: z.enum(["Confirmed", "Checked-In", "Checked-Out", "Cancelled", "Bloqueada"]),
   })
   .refine(
     (data) => {
@@ -70,6 +68,22 @@ const bookingFormSchema = z
       path: ["checkOutDate"],
     }
   )
+ .superRefine((data, ctx) => {
+    if (data.status !== 'Bloqueada' && data.booking_id.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["booking_id"],
+        message: "El ID de Cloudbeds es requerido.",
+      });
+    }
+     if (data.status !== 'Bloqueada' && data.guest_name.length < 3) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["guest_name"],
+        message: "El nombre debe tener al menos 3 caracteres.",
+      });
+    }
+  })
 
 export type NewBookingData = z.infer<typeof bookingFormSchema>
 
@@ -78,7 +92,8 @@ type NewBookingDialogProps = {
   onOpenChange: (open: boolean) => void
   onSave: (data: NewBookingData) => void
   rooms: Room[]
-  bookingToEdit?: Booking | null
+  bookingToEdit?: (Booking & { room?: Room }) | null
+  defaultValues?: { roomId: string, checkInDate: string }
 }
 
 export function NewBookingDialog({
@@ -87,6 +102,7 @@ export function NewBookingDialog({
   onSave,
   rooms,
   bookingToEdit,
+  defaultValues,
 }: NewBookingDialogProps) {
   const form = useForm<NewBookingData>({
     resolver: zodResolver(bookingFormSchema),
@@ -101,6 +117,7 @@ export function NewBookingDialog({
   })
 
   const isEditing = !!bookingToEdit
+  const status = form.watch("status")
 
   useEffect(() => {
     if (isOpen) {
@@ -121,16 +138,16 @@ export function NewBookingDialog({
         })
       } else {
         form.reset({
-          guest_name: "",
-          booking_id: "",
-          roomId: "",
-          checkInDate: "",
+          guest_name: defaultValues ? "Mantenimiento" : "",
+          booking_id: defaultValues ? `block-${new Date().getTime()}`: "",
+          roomId: defaultValues?.roomId || "",
+          checkInDate: defaultValues?.checkInDate || "",
           checkOutDate: "",
-          status: "Confirmed",
+          status: defaultValues ? "Bloqueada" : "Confirmed",
         })
       }
     }
-  }, [isOpen, bookingToEdit, isEditing, form])
+  }, [isOpen, bookingToEdit, isEditing, form, defaultValues])
 
   const onSubmit = (data: NewBookingData) => {
     onSave(data)
@@ -167,13 +184,14 @@ export function NewBookingDialog({
                 <FormItem>
                   <FormLabel>Nombre del Huésped</FormLabel>
                   <FormControl>
-                    <Input placeholder="Ej: Juan Pérez" {...field} />
+                    <Input placeholder={status === "Bloqueada" ? "Mantenimiento" : "Ej: Juan Pérez"} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
 
+            { status !== 'Bloqueada' &&
             <FormField
               control={form.control}
               name="booking_id"
@@ -190,6 +208,7 @@ export function NewBookingDialog({
                 </FormItem>
               )}
             />
+            }
 
             <FormField
               control={form.control}
@@ -197,14 +216,15 @@ export function NewBookingDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Habitación</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value} disabled={!!defaultValues?.roomId}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Seleccione una habitación disponible" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {availableRooms.map((room) => (
+                       {/* Show all rooms if editing, otherwise only available */}
+                      {(isEditing ? rooms : availableRooms).map((room) => (
                         <SelectItem key={room.id} value={room.id}>
                           Habitación {room.room_number} ({room.type})
                         </SelectItem>
@@ -224,7 +244,7 @@ export function NewBookingDialog({
                   <FormItem>
                     <FormLabel>Check-in</FormLabel>
                     <FormControl>
-                      <Input placeholder="dd/mm/aaaa" {...field} />
+                      <Input placeholder="dd/mm/aaaa" {...field} disabled={!!defaultValues?.checkInDate} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -260,6 +280,9 @@ export function NewBookingDialog({
                     <SelectContent>
                       <SelectItem value="Confirmed">Confirmado</SelectItem>
                       <SelectItem value="Checked-In">Checked-In</SelectItem>
+                      <SelectItem value="Bloqueada">Bloqueada</SelectItem>
+                      {isEditing && bookingToEdit?.status === "Checked-Out" && <SelectItem value="Checked-Out">Checked-Out</SelectItem>}
+                      {isEditing && bookingToEdit?.status === "Cancelled" && <SelectItem value="Cancelled">Cancelada</SelectItem>}
                     </SelectContent>
                   </Select>
                   <FormMessage />
