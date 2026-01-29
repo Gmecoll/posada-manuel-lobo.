@@ -1,6 +1,10 @@
+
 const functions = require('firebase-functions');
 const axios = require('axios');
 const crypto = require('crypto');
+const admin = require('firebase-admin');
+
+admin.initializeApp();
 
 // Credenciales confirmadas
 const ACCESS_ID = "g84wgnf5ajyv4pknnn8n";
@@ -8,9 +12,9 @@ const SECRET = "32850b4de252491c8f2608e0b74631f0";
 const ENDPOINT = "https://openapi.tuyaus.com";
 
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
-    const deviceId = data.deviceId;
-    if (!deviceId) {
-        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a "deviceId" argument.');
+    const { deviceId, nombreHuesped, habitacion } = data;
+    if (!deviceId || !nombreHuesped || !habitacion) {
+        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with "deviceId", "nombreHuesped", and "habitacion" arguments.');
     }
 
     try {
@@ -65,6 +69,12 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         const openRes = await enviarComando(true);
         
         if (!openRes.data.success) throw new Error(`Tuya Command Fail: ${openRes.data.msg}`);
+
+        // Log activity in Firestore using firebase-admin
+        await admin.firestore().collection('activity_logs').add({
+            description: `El huésped ${nombreHuesped} abrió la puerta de la Habitación ${habitacion}.`,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        });
 
         // Esperar 5 segundos y cerrar el switch virtual en Smart Life
         setTimeout(async () => {

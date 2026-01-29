@@ -6,9 +6,6 @@ import {
   doc,
   onSnapshot,
   updateDoc,
-  collection,
-  addDoc,
-  serverTimestamp,
 } from "firebase/firestore"
 import { getFunctions, httpsCallable } from "firebase/functions"
 import { CheckCircle2, QrCode, ShieldOff, Loader2 } from "lucide-react"
@@ -49,19 +46,16 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
     const solicitarApertura = httpsCallable(functions, "solicitarAperturaTuya")
 
     try {
-      const result = await solicitarApertura({ deviceId: room.tuya_device_id })
+      const result = await solicitarApertura({ 
+        deviceId: room.tuya_device_id,
+        nombreHuesped: booking.guest_name,
+        habitacion: room.roomNumber,
+      })
       const resultData = result.data as { success: boolean; [key: string]: any }
 
       if (resultData.success) {
         setIsUnlocked(true) // Triggers the green checkmark animation
         setUnlockMessage("¡Puerta abierta!")
-
-        // Log activity
-        const activityLogsCol = collection(db, "activity_logs")
-        addDoc(activityLogsCol, {
-          description: `El huésped ${booking.guest_name} abrió la puerta de la Habitación ${room.roomNumber}.`,
-          timestamp: serverTimestamp(),
-        })
 
         setTimeout(() => {
           setIsUnlocked(false)
