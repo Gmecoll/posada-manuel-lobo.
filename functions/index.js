@@ -141,7 +141,7 @@ exports.actualizarEstadoHabitaciones = onSchedule("every 30 minutes", async (eve
             // Rule for 'Ocupada'
             const activeBooking = allBookings.find(b =>
                 b.roomId === roomId &&
-                b.status === 'Checked-In' &&
+                (b.status === 'Checked-In' || b.status === 'Confirmed') &&
                 b.checkInDate <= todayStr &&
                 b.checkOutDate >= todayStr
             );
