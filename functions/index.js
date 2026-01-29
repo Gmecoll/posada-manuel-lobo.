@@ -36,8 +36,14 @@ exports.solicitarAperturaTuya = onCall(async (request) => {
         const verifiedDeviceId = roomData.tuya_device_id;
 
         if (!verifiedDeviceId || verifiedDeviceId === 'XXXX') {
+            await db.collection('activity_logs').add({
+                description: `Apertura denegada (Hab. ${data.room_number}): sin llave configurada.`,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                success: false
+            });
             throw new functions.https.HttpsError('failed-precondition', 'Habitación sin llave configurada');
         }
+
 
         // Lógica Tuya
         const t = Date.now().toString();
@@ -65,13 +71,24 @@ exports.solicitarAperturaTuya = onCall(async (request) => {
         if (resCmd.data.success) {
             return { success: true };
         } else {
+             await db.collection('activity_logs').add({
+                description: `Error de API Tuya (Hab. ${data.room_number}): ${resCmd.data.msg}`,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                success: false
+            });
             throw new Error(resCmd.data.msg);
         }
     } catch (error) {
         if (error instanceof functions.https.HttpsError) throw error;
+        await db.collection('activity_logs').add({
+            description: `Error interno en apertura (Hab. ${data.room_number}): ${error.message}`,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            success: false
+        });
         throw new functions.https.HttpsError('internal', error.message);
     }
 });
+
 
 // --- FUNCIÓN 2: ROTACIÓN CÓDIGO EMERGENCIA (onSchedule v2) ---
 exports.rotarCodigoEmergencia = onSchedule("every 30 minutes", async (event) => {
@@ -117,6 +134,7 @@ exports.actualizarEstadoHabitaciones = onSchedule("every 30 minutes", async (eve
         let checkedOutCount = 0;
         for (const doc of bookingsSnapshot.docs) {
             const booking = doc.data();
+            // Using < todayStr ensures check-out happens on the day *after* checkout date.
             if (booking.status === 'Checked-In' && booking.checkOutDate < todayStr) {
                 checkoutBatch.update(doc.ref, { status: 'Checked-Out', access_enabled: false });
                 checkedOutCount++;
@@ -128,52 +146,49 @@ exports.actualizarEstadoHabitaciones = onSchedule("every 30 minutes", async (eve
         }
 
         // --- Step 2: Determine new status for each room based on fresh booking data ---
+        // Get fresh data after potential check-outs
         const freshBookingsSnapshot = await db.collection('bookings').get();
         const allBookings = freshBookingsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-
-        const roomStatusUpdates = new Map();
+        
+        const updateBatch = db.batch();
+        let updatesCount = 0;
 
         for (const roomDoc of roomsSnapshot.docs) {
             const room = roomDoc.data();
             const roomId = roomDoc.id;
-            let newStatus = 'Disponible'; // Default status
 
             // Rule for 'Ocupada'
-            const activeBooking = allBookings.find(b =>
+            const isOccupied = allBookings.some(b =>
                 b.roomId === roomId &&
                 (b.status === 'Checked-In' || b.status === 'Confirmed') &&
                 b.checkInDate <= todayStr &&
                 b.checkOutDate >= todayStr
             );
 
-            if (activeBooking) {
-                newStatus = 'Ocupada';
-            } else {
-                 // Rule for 'Limpieza'
-                const checkoutTodayBooking = allBookings.find(b =>
-                    b.roomId === roomId &&
-                    b.checkOutDate === todayStr &&
-                    (b.status === 'Checked-Out' || b.status === 'Checked-In')
-                );
-                if (checkoutTodayBooking) {
-                    newStatus = 'Limpieza';
-                }
-            }
+            // Rule for 'Limpieza'
+            const isForCleaning = allBookings.some(b =>
+                b.roomId === roomId &&
+                b.checkOutDate === todayStr &&
+                (b.status === 'Checked-Out' || b.status === 'Checked-In')
+            );
             
+            let newStatus = 'Disponible';
+            if (isOccupied) {
+                newStatus = 'Ocupada';
+            } else if (isForCleaning) {
+                newStatus = 'Limpieza';
+            }
+
             if (room.status !== newStatus) {
-                roomStatusUpdates.set(roomId, newStatus);
+                const roomRef = db.collection('rooms').doc(roomId);
+                updateBatch.update(roomRef, { status: newStatus });
+                updatesCount++;
             }
         }
-
-        // --- Step 3: Batch update rooms that have a new status ---
-        if (roomStatusUpdates.size > 0) {
-            const updateBatch = db.batch();
-            for (const [roomId, status] of roomStatusUpdates.entries()) {
-                const roomRef = db.collection('rooms').doc(roomId);
-                updateBatch.update(roomRef, { status: status });
-            }
+       
+        if (updatesCount > 0) {
             await updateBatch.commit();
-            console.log(`Actualización automática de estado: ${roomStatusUpdates.size} habitaciones actualizadas.`);
+            console.log(`Actualización automática de estado: ${updatesCount} habitaciones actualizadas.`);
         } else {
              console.log('No se requirieron actualizaciones de estado de habitaciones.');
         }
