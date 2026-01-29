@@ -6,6 +6,9 @@ export type Room = {
   status: 'Disponible' | 'Ocupada' | 'Limpieza';
   remoteUnlock?: number; // Timestamp for remote unlock
   tuya_device_id?: string;
+  codes_pool?: string[];
+  backup_code?: string;
+  last_rotation?: any;
 };
 
 export type Guest = {
@@ -40,7 +43,18 @@ export const rooms: Room[] = [
   { id: 'room-1', room_number: '1', type: 'Standard', status: 'Ocupada', tuya_device_id: 'XXXX' },
   { id: 'room-2', room_number: '2', type: 'Deluxe', status: 'Ocupada', tuya_device_id: 'XXXX' },
   { id: 'room-3', room_number: '3', type: 'Suite', status: 'Limpieza', tuya_device_id: 'XXXX' },
-  { id: 'room-4', room_number: '4', type: 'Standard', status: 'Disponible', tuya_device_id: 'vdevo176964136999932' },
+  { 
+    id: 'room-4', 
+    room_number: '4', 
+    type: 'Standard', 
+    status: 'Disponible', 
+    tuya_device_id: 'vdevo176964136999932',
+    codes_pool: [
+      '111111', '222222', '333333', '444444', '555555', '666666', '777777', '888888', '999999', '000000',
+      '123456', '654321', '789012', '210987', '345678', '876543', '901234', '432109', '567890', '098765'
+    ],
+    backup_code: '111111'
+  },
   { id: 'room-5', room_number: '5', type: 'Deluxe', status: 'Ocupada', tuya_device_id: 'XXXX' },
   { id: 'room-6', room_number: '6', type: 'Standard', status: 'Disponible', tuya_device_id: 'XXXX' },
   { id: 'room-7', room_number: '7', type: 'Standard', status: 'Disponible', tuya_device_id: 'XXXX' },

@@ -3,6 +3,8 @@
 
 import { useState, useEffect } from "react"
 import { collection, doc, onSnapshot, updateDoc, writeBatch } from "firebase/firestore"
+import { format } from "date-fns"
+import { es } from "date-fns/locale"
 import {
   Card,
   CardContent,
@@ -83,6 +85,9 @@ export default function RoomsPage() {
         status: room.status,
         remoteUnlock: null,
         tuya_device_id: room.tuya_device_id,
+        codes_pool: room.codes_pool || null,
+        backup_code: room.backup_code || null,
+        last_rotation: null,
       })
     })
 
@@ -169,6 +174,17 @@ export default function RoomsPage() {
                   <div className="pt-2">
                     <p className="text-xs text-muted-foreground">Tuya Device ID</p>
                     <p className="font-mono text-sm font-semibold">{room.tuya_device_id}</p>
+                  </div>
+                )}
+                {room.codes_pool && room.codes_pool.length > 0 && (
+                  <div className="w-full pt-4 mt-4 border-t">
+                     <p className="text-xs text-muted-foreground">Cód. Emergencia</p>
+                     <p className="font-mono text-xl font-bold tracking-widest">{room.backup_code}</p>
+                     {room.last_rotation && (
+                        <p className="text-xs text-muted-foreground">
+                          Rotado: {format(new Date(room.last_rotation.seconds * 1000), "dd/MM/yy HH:mm'hs'", { locale: es })}
+                        </p>
+                     )}
                   </div>
                 )}
               </CardFooter>
