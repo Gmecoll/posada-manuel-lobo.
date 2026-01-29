@@ -6,9 +6,13 @@ const crypto = require('crypto');
 const ACCESS_ID = "g84wgnf5ajyv4pknnn8n";
 const SECRET = "32850b4de252491c8f2608e0b74631f0";
 const ENDPOINT = "https://openapi.tuyaus.com";
-const DEVICE_ID = "vdevo176964136999932";
 
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
+    const deviceId = data.deviceId;
+    if (!deviceId) {
+        throw new functions.https.HttpsError('invalid-argument', 'The function must be called with a "deviceId" argument.');
+    }
+
     try {
         // --- 1. OBTENER TOKEN (Firma V2) ---
         const t = Date.now().toString();
@@ -35,7 +39,7 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         // --- 2. FUNCIÓN INTERNA PARA ENVIAR COMANDOS ---
         const enviarComando = async (valor) => {
             const tCmd = Date.now().toString();
-            const urlCmd = `/v1.0/devices/${DEVICE_ID}/commands`;
+            const urlCmd = `/v1.0/devices/${deviceId}/commands`;
             const body = { "commands": [{ "code": "door_opened", "value": valor }] };
             const bHash = crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
             

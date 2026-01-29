@@ -45,10 +45,14 @@ export default function ActivityPage() {
     const unsubscribe = onSnapshot(
       q,
       (snapshot) => {
-        const logs = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as ActivityLog[]
+        const logs = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            description: data.description,
+            timestamp: data.timestamp,
+          }
+        }) as ActivityLog[]
         setActivityLogs(logs)
         setIsLoading(false)
       },
