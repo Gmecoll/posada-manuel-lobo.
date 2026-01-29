@@ -15,10 +15,10 @@ const ENDPOINT = "https://openapi.tuyaus.com";
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
     // --- BLOQUE 1: VALIDACIÓN Y MAPEO ---
     
-    // 1. Mapeo Híbrido: Acepta etiquetas de la App nueva (guest_name) y vieja (nombreHuesped)
+    // Mapeo explícito y simplificado. Se confía en que el frontend envía los campos correctos.
     const deviceId = data.deviceId || "vdevo176964136999932";
-    const guest_name = data.guest_name || data.nombreHuesped || "Huésped";
-    const room_number = data.room_number || data.habitacion || "7";
+    const guest_name = data.guest_name || "Huésped";
+    const room_number = data.room_number || "Desconocida";
     
     // 2. Validación de Seguridad (Opcional pero recomendada)
     if (context.auth) {
@@ -85,8 +85,9 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         if (!openRes.data.success) throw new Error(`Tuya Command Fail: ${openRes.data.msg}`);
 
         // REGISTRO DE ACTIVIDAD: Usando la colección 'activity_logs' para que coincida con el frontend.
+        const logDescription = `El huésped ${guest_name} abrió la puerta de la Habitación ${room_number}`;
         await admin.firestore().collection('activity_logs').add({
-            description: `El huésped ${guest_name} abrió la puerta de la Habitación ${room_number}`,
+            description: logDescription,
             timestamp: admin.firestore.FieldValue.serverTimestamp()
         });
 
