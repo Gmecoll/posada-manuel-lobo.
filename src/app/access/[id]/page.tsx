@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   doc,
   onSnapshot,
@@ -10,37 +10,76 @@ import {
   addDoc,
   serverTimestamp,
 } from "firebase/firestore"
-import { CheckCircle2, QrCode, ShieldOff } from "lucide-react"
+import { getFunctions, httpsCallable } from "firebase/functions"
+import { CheckCircle2, QrCode, ShieldOff, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/logo"
 import { cn } from "@/lib/utils"
-import { db } from "@/firebaseConfig"
+import { db, app } from "@/firebaseConfig"
 import type { Booking, Room } from "@/lib/data"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function RoomAccessPage({ params }: { params: { id: string } }) {
   const [isUnlocked, setIsUnlocked] = useState(false)
+  const [isUnlocking, setIsUnlocking] = useState(false)
+  const [unlockMessage, setUnlockMessage] = useState(
+    "Pulsa el botón para desbloquear la puerta."
+  )
   const [booking, setBooking] = useState<Booking | null>(null)
   const [room, setRoom] = useState<Room | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  const handleUnlock = () => {
-    if (!booking || !room) return
+  const handleUnlock = useCallback(async () => {
+    if (!booking || !room || isUnlocking) return
 
-    setIsUnlocked(true)
-    setTimeout(() => setIsUnlocked(false), 4000) // Reset after 4 seconds
+    if (!room.tuya_device_id || room.tuya_device_id === "XXXX") {
+      setUnlockMessage("Cerradura no configurada.")
+      setTimeout(
+        () => setUnlockMessage("Pulsa el botón para desbloquear la puerta."),
+        4000
+      )
+      return
+    }
 
-    // Log activity to Firestore
-    const activityLogsCol = collection(db, "activity_logs")
-    addDoc(activityLogsCol, {
-      message: `El huésped ${booking.guest_name} abrió la puerta de la Habitación ${room.roomNumber}.`,
-      timestamp: serverTimestamp(),
-    }).catch((error) => {
-      console.error("Error logging activity:", error)
-      // This is a background task, so we won't show an error to the user
-    })
-  }
+    setIsUnlocking(true)
+    setUnlockMessage("Abriendo...")
+
+    const functions = getFunctions(app)
+    const solicitarApertura = httpsCallable(functions, "solicitarAperturaTuya")
+
+    try {
+      const result = await solicitarApertura({ deviceId: room.tuya_device_id })
+      const resultData = result.data as { success: boolean; [key: string]: any }
+
+      if (resultData.success) {
+        setIsUnlocked(true) // Triggers the green checkmark animation
+        setUnlockMessage("¡Puerta abierta!")
+
+        // Log activity
+        const activityLogsCol = collection(db, "activity_logs")
+        addDoc(activityLogsCol, {
+          message: `El huésped ${booking.guest_name} abrió la puerta de la Habitación ${room.roomNumber}.`,
+          timestamp: serverTimestamp(),
+        })
+
+        setTimeout(() => {
+          setIsUnlocked(false)
+          setUnlockMessage("Pulsa el botón para desbloquear la puerta.")
+        }, 4000)
+      } else {
+        throw new Error("La API de Tuya no pudo abrir la puerta.")
+      }
+    } catch (error) {
+      console.error("Error al abrir la puerta:", error)
+      setUnlockMessage("Error al abrir. Intente de nuevo.")
+      setTimeout(() => {
+        setUnlockMessage("Pulsa el botón para desbloquear la puerta.")
+      }, 4000)
+    } finally {
+      setIsUnlocking(false)
+    }
+  }, [booking, room, isUnlocking])
 
   // Listen to booking changes
   useEffect(() => {
@@ -81,7 +120,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
       }
     })
     return () => unsubscribe()
-  }, [booking?.roomId])
+  }, [booking?.roomId, handleUnlock])
 
   if (isLoading) {
     return (
@@ -143,11 +182,11 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
         <p className="mt-2 text-muted-foreground">
           {isUnlocked
             ? "¡Bienvenido! La puerta está desbloqueada."
-            : accessExpired
-            ? "Acceso Expirado. Contacta con recepción."
-            : accessDeniedByStatus
-            ? "Acceso restringido. Contacta con recepción."
-            : "Pulsa el botón para desbloquear la puerta."}
+            : finalAccessDenied
+            ? accessExpired
+              ? "Acceso Expirado. Contacta con recepción."
+              : "Acceso restringido. Contacta con recepción."
+            : unlockMessage}
         </p>
 
         <div className="relative mt-12 flex h-80 w-full items-center justify-center">
@@ -183,11 +222,16 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
                 className="h-48 w-48 rounded-full shadow-lg"
                 onClick={handleUnlock}
                 aria-label="Desbloquear Puerta"
+                disabled={isUnlocking}
               >
-                <div className="flex flex-col items-center gap-2">
-                  <QrCode className="h-16 w-16" />
-                  <span className="text-lg font-semibold">Desbloquear</span>
-                </div>
+                {isUnlocking ? (
+                  <Loader2 className="h-16 w-16 animate-spin" />
+                ) : (
+                  <div className="flex flex-col items-center gap-2">
+                    <QrCode className="h-16 w-16" />
+                    <span className="text-lg font-semibold">Desbloquear</span>
+                  </div>
+                )}
               </Button>
             )}
           </div>
