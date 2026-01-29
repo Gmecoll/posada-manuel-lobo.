@@ -73,7 +73,7 @@ exports.solicitarAperturaTuya = onCall(async (request) => {
     }
 });
 
-// --- FUNCIÓN 2: ROTACIÓN (onSchedule v2) ---
+// --- FUNCIÓN 2: ROTACIÓN CÓDIGO EMERGENCIA (onSchedule v2) ---
 exports.rotarCodigoEmergencia = onSchedule("every 30 minutes", async (event) => {
     const db = admin.firestore();
     try {
@@ -94,8 +94,91 @@ exports.rotarCodigoEmergencia = onSchedule("every 30 minutes", async (event) => 
         });
 
         if (count > 0) await batch.commit();
-        console.log(`Rotación exitosa: ${count} habitaciones.`);
+        console.log(`Rotación de códigos exitosa: ${count} habitaciones actualizadas.`);
     } catch (err) {
-        console.error("Error rotación:", err);
+        console.error("Error en la rotación de códigos de emergencia:", err);
+    }
+});
+
+
+// --- FUNCIÓN 3: ACTUALIZACIÓN ESTADO HABITACIONES (onSchedule v2) ---
+exports.actualizarEstadoHabitaciones = onSchedule("every 30 minutes", async (event) => {
+    const db = admin.firestore();
+    const now = new Date();
+    // Use UTC date for comparisons to ensure consistency on the server
+    const todayStr = now.toISOString().split('T')[0];
+
+    try {
+        const bookingsSnapshot = await db.collection('bookings').get();
+        const roomsSnapshot = await db.collection('rooms').get();
+
+        // --- Step 1: Auto check-out guests whose check-out date has passed ---
+        const checkoutBatch = db.batch();
+        let checkedOutCount = 0;
+        for (const doc of bookingsSnapshot.docs) {
+            const booking = doc.data();
+            if (booking.status === 'Checked-In' && booking.checkOutDate < todayStr) {
+                checkoutBatch.update(doc.ref, { status: 'Checked-Out', access_enabled: false });
+                checkedOutCount++;
+            }
+        }
+        if (checkedOutCount > 0) {
+            await checkoutBatch.commit();
+            console.log(`Auto check-out: ${checkedOutCount} reservas actualizadas a 'Checked-Out'.`);
+        }
+
+        // --- Step 2: Determine new status for each room based on fresh booking data ---
+        const freshBookingsSnapshot = await db.collection('bookings').get();
+        const allBookings = freshBookingsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        const roomStatusUpdates = new Map();
+
+        for (const roomDoc of roomsSnapshot.docs) {
+            const room = roomDoc.data();
+            const roomId = roomDoc.id;
+            let newStatus = 'Disponible'; // Default status
+
+            // Rule for 'Ocupada'
+            const activeBooking = allBookings.find(b =>
+                b.roomId === roomId &&
+                b.status === 'Checked-In' &&
+                b.checkInDate <= todayStr &&
+                b.checkOutDate >= todayStr
+            );
+
+            if (activeBooking) {
+                newStatus = 'Ocupada';
+            } else {
+                 // Rule for 'Limpieza'
+                const checkoutTodayBooking = allBookings.find(b =>
+                    b.roomId === roomId &&
+                    b.checkOutDate === todayStr &&
+                    (b.status === 'Checked-Out' || b.status === 'Checked-In')
+                );
+                if (checkoutTodayBooking) {
+                    newStatus = 'Limpieza';
+                }
+            }
+            
+            if (room.status !== newStatus) {
+                roomStatusUpdates.set(roomId, newStatus);
+            }
+        }
+
+        // --- Step 3: Batch update rooms that have a new status ---
+        if (roomStatusUpdates.size > 0) {
+            const updateBatch = db.batch();
+            for (const [roomId, status] of roomStatusUpdates.entries()) {
+                const roomRef = db.collection('rooms').doc(roomId);
+                updateBatch.update(roomRef, { status: status });
+            }
+            await updateBatch.commit();
+            console.log(`Actualización automática de estado: ${roomStatusUpdates.size} habitaciones actualizadas.`);
+        } else {
+             console.log('No se requirieron actualizaciones de estado de habitaciones.');
+        }
+
+    } catch (err) {
+        console.error("Error en la rutina de actualización de estado de habitaciones:", err);
     }
 });

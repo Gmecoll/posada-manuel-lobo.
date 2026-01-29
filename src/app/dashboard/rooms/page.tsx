@@ -2,7 +2,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, doc, onSnapshot, updateDoc, writeBatch } from "firebase/firestore"
+import { collection, doc, onSnapshot, writeBatch } from "firebase/firestore"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import {
@@ -13,13 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { db } from "@/firebaseConfig"
 import type { Room } from "@/lib/data"
@@ -29,9 +22,7 @@ import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { RefreshCw } from "lucide-react"
 
-type RoomStatus = "Disponible" | "Ocupada" | "Limpieza"
-
-const statusColors: Record<RoomStatus, string> = {
+const statusColors: Record<string, string> = {
   Disponible: "bg-green-100 text-green-800 border-green-200 hover:bg-green-100",
   Ocupada: "bg-red-100 text-red-800 border-red-200 hover:bg-red-100",
   Limpieza: "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100",
@@ -56,24 +47,6 @@ export default function RoomsPage() {
 
     return () => unsubscribe()
   }, [])
-
-  const handleStatusChange = async (roomId: string, newStatus: RoomStatus) => {
-    const roomRef = doc(db, "rooms", roomId)
-    try {
-      await updateDoc(roomRef, { status: newStatus })
-      toast({
-        title: "Estado actualizado",
-        description: `La habitación ahora está ${newStatus}.`,
-      })
-    } catch (error) {
-      console.error("Error updating room status: ", error)
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: "No se pudo actualizar el estado de la habitación.",
-      })
-    }
-  }
 
   const seedDatabase = async () => {
     const batch = writeBatch(db)
@@ -147,31 +120,16 @@ export default function RoomsPage() {
                 <Badge
                   className={cn(
                     "text-sm font-semibold",
-                    statusColors[room.status as RoomStatus]
+                    statusColors[room.status]
                   )}
                   variant="outline"
                 >
                   {room.status}
                 </Badge>
               </CardContent>
-              <CardFooter className="flex-col items-start gap-4">
-                <Select
-                  value={room.status}
-                  onValueChange={(newStatus: RoomStatus) =>
-                    handleStatusChange(room.id, newStatus)
-                  }
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Cambiar estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Disponible">Disponible</SelectItem>
-                    <SelectItem value="Ocupada">Ocupada</SelectItem>
-                    <SelectItem value="Limpieza">Limpieza</SelectItem>
-                  </SelectContent>
-                </Select>
-                {room.tuya_device_id && (
-                  <div className="pt-2">
+              <CardFooter className="flex-col items-start gap-4 pt-6">
+                {room.tuya_device_id && room.tuya_device_id !== 'XXXX' && (
+                  <div>
                     <p className="text-xs text-muted-foreground">Tuya Device ID</p>
                     <p className="font-mono text-sm font-semibold">{room.tuya_device_id}</p>
                   </div>
