@@ -176,10 +176,6 @@ export default function BookingsPage() {
   }, [])
 
   const handleDelete = useCallback(async (booking: BookingWithDetails) => {
-    if (!window.confirm(`¿Está seguro de que desea eliminar la reserva de ${booking.guest_name}?`)) {
-      return;
-    }
-
     const bookingRef = doc(db, "bookings", booking.id);
     try {
       if (booking.status === "Checked-In") {
