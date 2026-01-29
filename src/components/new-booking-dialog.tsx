@@ -138,12 +138,12 @@ export function NewBookingDialog({
         })
       } else {
         form.reset({
-          guest_name: defaultValues ? "Mantenimiento" : "",
-          booking_id: defaultValues ? `block-${new Date().getTime()}`: "",
+          guest_name: "",
+          booking_id: "",
           roomId: defaultValues?.roomId || "",
           checkInDate: defaultValues?.checkInDate || "",
           checkOutDate: "",
-          status: defaultValues ? "Bloqueada" : "Confirmed",
+          status: "Confirmed",
         })
       }
     }

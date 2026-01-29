@@ -76,17 +76,6 @@ export const bookings: Booking[] = [
     access_enabled: true,
   },
   {
-    id: 'booking-2',
-    guest_name: 'Jane Smith',
-    booking_id: 'cb12346',
-    roomId: 'room-2',
-    room_number: '2',
-    checkInDate: new Date().toISOString().split('T')[0],
-    checkOutDate: new Date(new Date().setDate(new Date().getDate() + 3)).toISOString().split('T')[0],
-    status: 'Confirmed',
-    access_enabled: false,
-  },
-  {
     id: 'booking-3',
     guest_name: 'Peter Jones',
     booking_id: 'cb12347',
