@@ -21,7 +21,6 @@ const getToken = async () => {
     const method = "GET";
     const url = "/v1.0/token?grant_type=1";
     
-    // Hash de body vacío para GET
     const contentHash = crypto.createHash('sha256').update("").digest('hex');
     const stringToSign = [method, contentHash, "", url].join("\n");
     const signStr = ACCESS_ID + t + stringToSign;
@@ -44,44 +43,34 @@ const getToken = async () => {
 };
 
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
-    // 1. Log para depuración: Imprime los datos recibidos
-    console.log('Datos recibidos en la función:', JSON.stringify(data));
+    // 1. CAPTURA Y VALIDACIÓN DE DATOS
+    console.log('Datos recibidos:', JSON.stringify(data));
+    const deviceId = data.deviceId || data.device_id;
+    const guest_name = data.guest_name || "Huésped Desconocido";
+    const room_number = data.room_number || "N/A";
 
-    // 2. CAPTURA DE DATOS
-    const deviceId = data.deviceId || data.device_id || data.id;
-    const g_name = data.guest_name || "Huésped";
-    const r_num = data.room_number || "N/A";
-
-    // 3. Validación mejorada para depuración
+    // 2. VALIDACIÓN PREVENTIVA
     if (!deviceId) {
-        const errorMessage = `Falta deviceId. Recibido: ${JSON.stringify(data)}`;
-        console.error(errorMessage);
-        throw new functions.https.HttpsError('invalid-argument', errorMessage);
+        throw new functions.https.HttpsError('not-found', 'Esta habitación no tiene una cerradura vinculada (falta deviceId).');
     }
 
-    // 4. REGISTRO PREVIO (Para asegurar que la descripción aparezca)
-    const logDescription = `El huésped ${g_name} abrió la puerta de la Habitación ${r_num}`;
     try {
+        // 3. REGISTRO DE ACTIVIDAD (Solo si el deviceId es válido)
+        const logDescription = `Intento de apertura para Habitación ${room_number} por ${guest_name}.`;
         await admin.firestore().collection('activity_logs').add({
-            description: logDescription, 
+            description: logDescription,
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            type: "wifi_manual_click",
-            via: "cloud_v2_strict"
+            type: "wifi_cloud_request",
         });
-    } catch (e) { 
-        console.error("Firestore Log Error:", e.message); 
-        // No lanzamos error aquí para no detener el flujo de apertura
-    }
 
-    // 5. APERTURA CON FIRMA V2 ESTRICTA
-    try {
+        // 4. LÓGICA DE APERTURA TUYA
         const token = await getToken();
         const t = Date.now().toString();
         const method = "POST";
         const url = `/v1.0/devices/${deviceId}/commands`;
         
         const bodyObj = { "commands": [{ "code": "unlock_remote", "value": true }] };
-        const bodyStr = JSON.stringify(bodyObj); 
+        const bodyStr = JSON.stringify(bodyObj);
 
         const contentHash = crypto.createHash('sha256').update(bodyStr).digest('hex');
         const stringToSign = [method, contentHash, "", url].join("\n");
@@ -110,8 +99,8 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         }
 
     } catch (error) {
+        // 5. MANEJO DE ERRORES
         console.error("INTERNAL ERROR CAUSE:", error.message);
-        // Usamos el mensaje de error de Axios/Tuya si está disponible
         const errorMessage = error.response?.data?.msg || error.message || "Error desconocido en la apertura";
         throw new functions.https.HttpsError('internal', errorMessage);
     }
