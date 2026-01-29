@@ -44,7 +44,7 @@ export function QrCodeDialog({
           <DialogTitle className="font-headline">Código QR de Acceso</DialogTitle>
           <DialogDescription>
             Escanea este código para desbloquear la puerta de la Habitación{" "}
-            {room.roomNumber}.
+            {room.room_number}.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center justify-center space-y-4 py-8">
@@ -58,7 +58,7 @@ export function QrCodeDialog({
           <div className="text-center">
             <p className="font-semibold">ID Reserva: {booking.booking_id}</p>
             <p className="text-sm text-muted-foreground">
-              Habitación {room.roomNumber}
+              Habitación {room.room_number}
             </p>
           </div>
         </div>

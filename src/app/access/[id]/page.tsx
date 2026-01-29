@@ -49,7 +49,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
       const result = await solicitarApertura({ 
         deviceId: room.tuya_device_id,
         guest_name: booking.guest_name,
-        room_number: room.roomNumber,
+        room_number: room.room_number,
       })
       const resultData = result.data as { success: boolean; [key: string]: any }
 
@@ -171,7 +171,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
       </div>
       <div className="w-full max-w-md text-center">
         <h1 className="font-headline text-3xl md:text-4xl">
-          Habitación <span className="text-primary">{room.roomNumber}</span>
+          Habitación <span className="text-primary">{room.room_number}</span>
         </h1>
         <p className="mt-2 text-muted-foreground">
           {isUnlocked

@@ -155,7 +155,7 @@ export default function Dashboard() {
                     <TableCell>
                       <div className="font-medium">{booking.booking_id}</div>
                     </TableCell>
-                    <TableCell>Habitación {room?.roomNumber}</TableCell>
+                    <TableCell>Habitación {room?.room_number}</TableCell>
                     <TableCell>{booking.checkInDate}</TableCell>
                     <TableCell>
                       <Badge variant={booking.status === 'Checked-In' ? "default" : "secondary"}>{booking.status}</Badge>

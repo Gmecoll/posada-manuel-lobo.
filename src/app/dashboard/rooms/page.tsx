@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -47,7 +48,7 @@ export default function RoomsPage() {
           ...doc.data(),
         }))
         // Ensure data is sorted by room number (as numbers)
-        .sort((a, b) => parseInt(a.roomNumber ?? '0') - parseInt(b.roomNumber ?? '0')) as Room[]
+        .sort((a, b) => parseInt(a.room_number ?? '0') - parseInt(b.room_number ?? '0')) as Room[]
       setRooms(roomsFromDb)
     })
 
@@ -77,7 +78,7 @@ export default function RoomsPage() {
     initialRooms.forEach((room) => {
       const docRef = doc(db, "rooms", room.id)
       batch.set(docRef, { 
-        roomNumber: room.roomNumber,
+        room_number: room.room_number,
         type: room.type,
         status: room.status,
         remoteUnlock: null,
@@ -135,7 +136,7 @@ export default function RoomsPage() {
           {rooms.map((room) => (
             <Card key={room.id} className="flex flex-col">
               <CardHeader>
-                <CardTitle>Habitación {room.roomNumber}</CardTitle>
+                <CardTitle>Habitación {room.room_number}</CardTitle>
                 <CardDescription>{room.type}</CardDescription>
               </CardHeader>
               <CardContent className="flex-grow">

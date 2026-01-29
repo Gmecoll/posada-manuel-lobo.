@@ -206,7 +206,7 @@ export function NewBookingDialog({
                     <SelectContent>
                       {availableRooms.map((room) => (
                         <SelectItem key={room.id} value={room.id}>
-                          Habitación {room.roomNumber} ({room.type})
+                          Habitación {room.room_number} ({room.type})
                         </SelectItem>
                       ))}
                     </SelectContent>

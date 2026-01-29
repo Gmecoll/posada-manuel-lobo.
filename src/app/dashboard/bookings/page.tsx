@@ -135,7 +135,7 @@ export default function BookingsPage() {
         await updateDoc(roomRef, { status: "Ocupada" })
         toast({
           title: "Check-in Exitoso",
-          description: `Check-in para reserva ${booking.booking_id} en Habitación ${booking.room.roomNumber}.`,
+          description: `Check-in para reserva ${booking.booking_id} en Habitación ${booking.room.room_number}.`,
         })
       } catch (error) {
         console.error("Error during check-in:", error)
@@ -156,7 +156,7 @@ export default function BookingsPage() {
         await updateDoc(roomRef, { remoteUnlock: Date.now() })
         toast({
           title: "Apertura Remota Activada",
-          description: `La puerta de la Habitación ${booking.room.roomNumber} se desbloqueará momentáneamente.`,
+          description: `La puerta de la Habitación ${booking.room.room_number} se desbloqueará momentáneamente.`,
         })
       } catch (error) {
         console.error("Error triggering remote open:", error)
@@ -208,7 +208,7 @@ export default function BookingsPage() {
     try {
       const matchedRoom = rooms.find((r) => r.id === bookingData.roomId)
 
-      if (!matchedRoom || !matchedRoom.roomNumber) {
+      if (!matchedRoom || !matchedRoom.room_number) {
         toast({
           variant: "destructive",
           title: "Error de Habitación",
@@ -233,7 +233,7 @@ export default function BookingsPage() {
         guest_name: bookingData.guest_name,
         booking_id: bookingData.booking_id,
         roomId: bookingData.roomId,
-        room_number: matchedRoom.roomNumber,
+        room_number: matchedRoom.room_number,
         checkInDate: format(checkIn, "yyyy-MM-dd"),
         checkOutDate: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,

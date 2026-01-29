@@ -1,7 +1,7 @@
 
 export type Room = {
   id: string;
-  roomNumber: string;
+  room_number: string;
   type: 'Standard' | 'Deluxe' | 'Suite';
   status: 'Disponible' | 'Ocupada' | 'Limpieza';
   remoteUnlock?: number; // Timestamp for remote unlock
@@ -39,16 +39,16 @@ export const guests: Guest[] = [
 
 // This is now just initial data for populating firestore. The app will read from Firestore.
 export const rooms: Room[] = [
-  { id: 'room-1', roomNumber: '1', type: 'Standard', status: 'Ocupada', nfcCode: '04 f2 3a 9c', tuya_device_id: 'XXXX' },
-  { id: 'room-2', roomNumber: '2', type: 'Deluxe', status: 'Ocupada', nfcCode: '1a 8c b3 2e', tuya_device_id: 'XXXX' },
-  { id: 'room-3', roomNumber: '3', type: 'Suite', status: 'Limpieza', nfcCode: 'b6 2d 7f 4a', tuya_device_id: 'XXXX' },
-  { id: 'room-4', roomNumber: '4', type: 'Standard', status: 'Disponible', nfcCode: '30 96 9d a7', tuya_device_id: 'kajxpa5eoyvbxlmt' },
-  { id: 'room-5', roomNumber: '5', type: 'Deluxe', status: 'Ocupada', nfcCode: 'c3 99 1e 5f', tuya_device_id: 'XXXX' },
-  { id: 'room-6', roomNumber: '6', type: 'Standard', status: 'Disponible', nfcCode: 'd7 a1 8b 6c', tuya_device_id: 'XXXX' },
-  { id: 'room-7', roomNumber: '7', type: 'Standard', status: 'Disponible', nfcCode: 'e9 45 2c 7d', tuya_device_id: 'XXXX' },
-  { id: 'room-8', roomNumber: '8', type: 'Suite', status: 'Ocupada', nfcCode: 'f1 5b 9d 8e', tuya_device_id: 'XXXX' },
-  { id: 'room-9', roomNumber: '9', type: 'Deluxe', status: 'Limpieza', nfcCode: '2a 3c 4d 5e', tuya_device_id: 'XXXX' },
-  { id: 'room-10', roomNumber: '10', type: 'Standard', status: 'Disponible', nfcCode: '6f 7a 8b 9c', tuya_device_id: 'XXXX' },
+  { id: 'room-1', room_number: '1', type: 'Standard', status: 'Ocupada', nfcCode: '04 f2 3a 9c', tuya_device_id: 'XXXX' },
+  { id: 'room-2', room_number: '2', type: 'Deluxe', status: 'Ocupada', nfcCode: '1a 8c b3 2e', tuya_device_id: 'XXXX' },
+  { id: 'room-3', room_number: '3', type: 'Suite', status: 'Limpieza', nfcCode: 'b6 2d 7f 4a', tuya_device_id: 'XXXX' },
+  { id: 'room-4', room_number: '4', type: 'Standard', status: 'Disponible', nfcCode: '30 96 9d a7', tuya_device_id: 'kajxpa5eoyvbxlmt' },
+  { id: 'room-5', room_number: '5', type: 'Deluxe', status: 'Ocupada', nfcCode: 'c3 99 1e 5f', tuya_device_id: 'XXXX' },
+  { id: 'room-6', room_number: '6', type: 'Standard', status: 'Disponible', nfcCode: 'd7 a1 8b 6c', tuya_device_id: 'XXXX' },
+  { id: 'room-7', room_number: '7', type: 'Standard', status: 'Disponible', nfcCode: 'e9 45 2c 7d', tuya_device_id: 'XXXX' },
+  { id: 'room-8', room_number: '8', type: 'Suite', status: 'Ocupada', nfcCode: 'f1 5b 9d 8e', tuya_device_id: 'XXXX' },
+  { id: 'room-9', room_number: '9', type: 'Deluxe', status: 'Limpieza', nfcCode: '2a 3c 4d 5e', tuya_device_id: 'XXXX' },
+  { id: 'room-10', room_number: '10', type: 'Standard', status: 'Disponible', nfcCode: '6f 7a 8b 9c', tuya_device_id: 'XXXX' },
 ];
 
 export const bookings: Booking[] = [
