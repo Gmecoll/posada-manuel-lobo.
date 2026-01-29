@@ -59,7 +59,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
         // Log activity
         const activityLogsCol = collection(db, "activity_logs")
         addDoc(activityLogsCol, {
-          message: `El huésped ${booking.guest_name} abrió la puerta de la Habitación ${room.roomNumber}.`,
+          description: `El huésped ${booking.guest_name} abrió la puerta de la Habitación ${room.roomNumber}.`,
           timestamp: serverTimestamp(),
         })
 

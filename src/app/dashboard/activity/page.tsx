@@ -28,8 +28,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 type ActivityLog = {
   id: string
   description?: string
-  message?: string
-  activity?: string
   timestamp: {
     seconds: number
     nanoseconds: number
@@ -101,10 +99,7 @@ export default function ActivityPage() {
                 activityLogs.map((log) => (
                   <TableRow key={log.id}>
                     <TableCell className="font-medium">
-                      {log.description ||
-                        log.message ||
-                        log.activity ||
-                        "Evento sin descripción."}
+                      {log.description || "Evento sin descripción."}
                     </TableCell>
                     <TableCell className="text-right text-sm text-muted-foreground">
                       {formatTimestamp(log.timestamp)}
