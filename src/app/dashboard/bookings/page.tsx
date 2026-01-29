@@ -244,10 +244,6 @@ export default function BookingsPage() {
       if (isEditing && bookingToEdit) {
         const bookingRef = doc(db, "bookings", bookingToEdit.id)
         await updateDoc(bookingRef, bookingToSave)
-        toast({
-          title: "Reserva Actualizada",
-          description: "Los cambios han sido guardados.",
-        })
       } else {
         await addDoc(collection(db, "bookings"), bookingToSave)
         toast({
