@@ -11,30 +11,70 @@ const SECRET = "32850b4de252491c8f2608e0b74631f0";
 const ENDPOINT = "https://openapi.tuyaus.com";
 
 exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => {
-    // REGLA DE SEGURIDAD ESTRICTA:
-    // Validar que el tuya_device_id es válido antes de hacer nada más.
-    if (!data.tuya_device_id || data.tuya_device_id === 'XXXX') {
-        throw new functions.https.HttpsError('failed-precondition', 'Esta habitación no tiene una llave digital configurada');
+    const db = admin.firestore();
+
+    // 1. Validar que se envió el número de habitación
+    if (!data.room_number) {
+        throw new functions.https.HttpsError('invalid-argument', 'Falta el número de habitación (room_number).');
     }
     
-    // Si la validación es exitosa, se procede con el registro de actividad.
-    const db = admin.firestore();
-    const logData = {
-        description: `Intento de acceso a Hab. ${data.room_number || 'N/A'} por ${data.guest_name || 'Desconocido'}`,
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        details: {
-            guest: data.guest_name || 'Desconocido',
-            room: data.room_number || 'N/A',
-            deviceId: data.tuya_device_id,
-        }
-    };
-    await db.collection('activity_logs').add(logData);
+    let verifiedDeviceId;
 
-    // Envolver la lógica de Tuya en un try/catch para manejar errores de conexión.
     try {
+        // 2. Buscar la habitación en Firestore para obtener el ID de dispositivo seguro
+        const roomsRef = db.collection('rooms');
+        const snapshot = await roomsRef.where('room_number', '==', data.room_number).limit(1).get();
+
+        if (snapshot.empty) {
+             const logData = {
+                description: `Intento de acceso a habitación no encontrada: ${data.room_number}.`,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                details: {
+                    guest: data.guest_name || 'Desconocido',
+                    room: data.room_number,
+                    error: 'Habitación no encontrada en la base de datos.',
+                }
+            };
+            await db.collection('activity_logs').add(logData);
+            throw new functions.https.HttpsError('not-found', `La habitación ${data.room_number} no existe.`);
+        }
+
+        const roomData = snapshot.docs[0].data();
+        verifiedDeviceId = roomData.tuya_device_id;
+
+        // 3. Validar el ID de dispositivo obtenido de Firestore
+        if (!verifiedDeviceId || verifiedDeviceId === 'XXXX') {
+            // Registrar intento fallido por falta de configuración
+            const logData = {
+                description: `Acceso denegado a Hab. ${data.room_number}: sin llave digital configurada.`,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                details: {
+                    guest: data.guest_name || 'Desconocido',
+                    room: data.room_number,
+                    error: 'Habitación sin llave configurada',
+                }
+            };
+            await db.collection('activity_logs').add(logData);
+            
+            throw new functions.https.HttpsError('failed-precondition', 'Habitación sin llave configurada');
+        }
+
+        // 4. Si la validación es exitosa, se procede con el registro de actividad
+        const logData = {
+            description: `Intento de acceso a Hab. ${data.room_number} por ${data.guest_name || 'Desconocido'} (ID verificado desde BD)`,
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            details: {
+                guest: data.guest_name || 'Desconocido',
+                room: data.room_number,
+                deviceId: verifiedDeviceId, // Usamos el ID verificado
+            }
+        };
+        await db.collection('activity_logs').add(logData);
+        
+        // --- Inicia Lógica de Tuya ---
         const t = Date.now().toString();
         
-        // --- PASO 1: OBTENER TOKEN ---
+        // PASO 1: OBTENER TOKEN
         const urlToken = "/v1.0/token?grant_type=1";
         const contentHashEmpty = crypto.createHash('sha256').update("").digest('hex');
         const strToSignToken = ["GET", contentHashEmpty, "", urlToken].join("\n");
@@ -51,8 +91,8 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         }
         const token = resToken.data.result.access_token;
 
-        // --- PASO 2: ENVIAR COMANDO BOOLEAN ---
-        const urlCmd = `/v1.0/devices/${data.tuya_device_id}/commands`;
+        // PASO 2: ENVIAR COMANDO BOOLEAN
+        const urlCmd = `/v1.0/devices/${verifiedDeviceId}/commands`; // Usamos el ID verificado
         const body = { 
             "commands": [{ "code": "door_opened", "value": true }] 
         };
@@ -82,8 +122,13 @@ exports.solicitarAperturaTuya = functions.https.onCall(async (data, context) => 
         }
 
     } catch (error) {
-        // Captura cualquier error (conexión, token, comando) y lo devuelve a la app.
-        throw new functions.https.HttpsError('internal', error.message);
+        // Captura cualquier error (Firestore, Tuya, etc.) y lo devuelve de forma controlada.
+        if (error instanceof functions.https.HttpsError) {
+            throw error; // Re-lanza los errores HttpsError para que lleguen a la App.
+        }
+        // Para otros errores, los encapsula.
+        console.error("Error Interno en solicitarAperturaTuya:", error);
+        throw new functions.https.HttpsError('internal', error.message || 'Ocurrió un error inesperado en el servidor.');
     }
 });
 
