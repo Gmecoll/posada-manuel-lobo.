@@ -30,7 +30,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
   const handleUnlock = useCallback(async () => {
     if (!booking || !room || isUnlocking) return
 
-    if (!room.tuya_device_id || room.tuya_device_id === "XXXX") {
+    if (!room.deviceId || room.deviceId === "XXXX") {
       setUnlockMessage("Cerradura no configurada.")
       setTimeout(
         () => setUnlockMessage("Pulsa el botón para desbloquear la puerta."),
@@ -47,7 +47,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
 
     try {
       const result = await solicitarApertura({ 
-        deviceId: room.tuya_device_id,
+        deviceId: room.deviceId,
         guest_name: booking.guest_name,
         room_number: room.room_number,
       })
