@@ -59,7 +59,7 @@ exports.solicitarAperturaTuya = onCall(async (request) => {
 
         const token = resToken.data.result.access_token;
         const urlCmd = `/v1.0/devices/${verifiedDeviceId}/commands`;
-        const body = { "commands": [{ "code": "door_opened", "value": true }] };
+        const body = { "commands": [{ "code": "lock_motor_state", "value": true }] };
         const bodyStr = JSON.stringify(body);
         const contentHashCmd = crypto.createHash('sha256').update(bodyStr).digest('hex');
         const strToSignCmd = ["POST", contentHashCmd, "", urlCmd].join("\n");
