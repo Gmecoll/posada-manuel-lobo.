@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "studio-4343626376-fea63"
+  },
+  "targets": {
+    "studio-4343626376-fea63": {
+      "hosting": {
+        "main-app": [
+          "studio-4343626376-fea63"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
