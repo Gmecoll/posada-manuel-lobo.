@@ -47,10 +47,18 @@ export default function ServicesPage() {
       servicesCol,
       (snapshot) => {
         const servicesFromDb = snapshot.docs
-          .map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
+          .map((doc) => {
+            const data = doc.data()
+            return {
+              id: doc.id,
+              title: data.title || data.nombre,
+              description: data.description || data.descripcion,
+              price: data.price ?? data.precio,
+              unidad: data.unidad,
+              icon: data.icon || data.icono,
+              active: data.active ?? data.activo,
+            }
+          })
           .sort((a, b) => (a.title || "").localeCompare(b.title || "")) as Service[]
         setServices(servicesFromDb)
         setIsLoading(false)
