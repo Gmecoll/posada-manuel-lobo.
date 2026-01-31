@@ -1,9 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ShieldCheck, Loader2 } from "lucide-react"
-import { signInWithEmailAndPassword } from "firebase/auth"
+import {
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  type User,
+} from "firebase/auth"
 import { auth } from "@/firebaseConfig"
 
 import { Button } from "@/components/ui/button"
@@ -31,13 +35,24 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const [firebaseError, setFirebaseError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [user, setUser] = useState<User | null>(null)
   const router = useRouter()
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser)
+    })
+    // Cleanup subscription on unmount
+    return () => unsubscribe()
+  }, [])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
+    setFirebaseError(null)
 
     try {
       await signInWithEmailAndPassword(auth, email, password)
@@ -52,9 +67,13 @@ export default function AdminLoginPage() {
       } else {
         setError("Ocurrió un error inesperado. Por favor, intente de nuevo.")
       }
+      setFirebaseError(firebaseError.code || "Error desconocido")
       setIsLoading(false)
     }
   }
+
+  const adminUID = "TGaxvFAyCNRM79L36mN3S4X3qnu2"
+  const isUserAdmin = user?.uid === adminUID
 
   return (
     <main className="flex min-h-screen w-full flex-col items-center justify-center gap-8 bg-gray-100 p-4">
@@ -117,7 +136,7 @@ export default function AdminLoginPage() {
         <CardHeader>
           <CardTitle>Datos de Depuración</CardTitle>
           <CardDescription>
-            Utiliza estas credenciales para acceder al panel.
+            Credenciales de prueba e información de sesión en tiempo real.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -130,13 +149,55 @@ export default function AdminLoginPage() {
             </TableHeader>
             <TableBody>
               <TableRow>
-                <TableCell>Email</TableCell>
+                <TableCell>Email de prueba</TableCell>
                 <TableCell>pilar@posada.com</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell>Contraseña</TableCell>
+                <TableCell>Contraseña de prueba</TableCell>
                 <TableCell>palta</TableCell>
               </TableRow>
+              {user ? (
+                <>
+                  <TableRow>
+                    <TableCell
+                      colSpan={2}
+                      className="bg-muted text-center font-semibold"
+                    >
+                      Usuario en Sesión
+                    </TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Usuario Registrado</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Estado de Admin</TableCell>
+                    <TableCell>{isUserAdmin ? "SÍ ✅" : "NO ❌"}</TableCell>
+                  </TableRow>
+                  <TableRow>
+                    <TableCell>Nivel de Privilegios</TableCell>
+                    <TableCell>
+                      {isUserAdmin
+                        ? "Control Total (Lectura/Escritura)"
+                        : "Solo Lectura / Restringido"}
+                    </TableCell>
+                  </TableRow>
+                </>
+              ) : (
+                <TableRow>
+                  <TableCell>Estado de Sesión</TableCell>
+                  <TableCell>No autenticado</TableCell>
+                </TableRow>
+              )}
+
+              {firebaseError && (
+                <TableRow>
+                  <TableCell>Último error de Firebase</TableCell>
+                  <TableCell className="text-destructive">
+                    {firebaseError}
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
