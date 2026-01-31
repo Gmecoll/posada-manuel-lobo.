@@ -1,5 +1,5 @@
 
-const { onCall } = require("firebase-functions/v2/https");
+const { onCall } = require("firebase-functions/v2/on");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const functions = require("firebase-functions/v1");
 const axios = require('axios');
@@ -147,7 +147,7 @@ exports.iniciarPagoServicio = onCall(async (request) => {
         const dlocalConfig = functions.config().dlocal;
         if (!dlocalConfig || !dlocalConfig.login || !dlocalConfig.secret || !dlocalConfig.trans_key) {
             console.error("La configuración de dLocal Go no está definida en Firebase Functions.");
-            throw new functions.https.HttpsError('internal', 'La configuración del procesador de pagos no está completa.');
+            throw new functions.https.HttpsError('internal', 'Faltan variables de entorno en Firebase. La configuración del procesador de pagos no está completa.');
         }
         const LOGIN = dlocalConfig.login;
         const SECRET = dlocalConfig.secret;
@@ -182,8 +182,7 @@ exports.iniciarPagoServicio = onCall(async (request) => {
 
         // 5. Generar firma y cabeceras
         const idempotencyKey = crypto.randomUUID();
-        const bodyStr = JSON.stringify(body);
-        const signature = crypto.createHmac('sha256', SECRET).update(bodyStr).digest('hex');
+        const signature = crypto.createHmac('sha256', SECRET).update(JSON.stringify(body)).digest('hex');
 
         const headers = {
             'X-Login': LOGIN,
@@ -203,7 +202,7 @@ exports.iniciarPagoServicio = onCall(async (request) => {
             await db.collection('solicitudes_servicios').add({
                 servicioId: data.serviceId,
                 nombreServicio: serviceTitle,
-                monto: data.monto,
+                monto: data.amount,
                 fecha: admin.firestore.FieldValue.serverTimestamp(),
                 estado_pago: 'pendiente',
                 usuarioId: data.guestId,
@@ -223,7 +222,6 @@ exports.iniciarPagoServicio = onCall(async (request) => {
         if (error instanceof functions.https.HttpsError) {
             throw error;
         }
-        const errorMessage = error.response?.data?.message || 'No se pudo iniciar el proceso de pago. Intente de nuevo más tarde.';
-        throw new functions.https.HttpsError('internal', errorMessage);
+        throw new functions.https.HttpsError('internal', 'Error detallado: ' + error.message);
     }
 });
