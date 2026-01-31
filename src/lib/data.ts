@@ -35,7 +35,8 @@ export type Service = {
   description: string;
   price: number;
   unidad: string;
-  icon: string; // lucide-react icon name
+  availableHours: string;
+  imageUrl?: string;
   active: boolean;
 };
 
@@ -148,7 +149,8 @@ export const services: Service[] = [
     description: 'Disfruta de un paseo por el Río de la Plata. Incluye remos y chaleco salvavidas.',
     price: 25,
     unidad: 'por hora',
-    icon: 'Boat',
+    availableHours: '9:00 AM - 6:00 PM',
+    imageUrl: `https://picsum.photos/seed/kayak/400/300`,
     active: true,
   },
   {
@@ -157,7 +159,8 @@ export const services: Service[] = [
     description: 'Recorre los campos y viñedos cercanos con nuestros caballos mansos. Guía incluido.',
     price: 40,
     unidad: 'por persona',
-    icon: 'Sunrise',
+    availableHours: '10:00 AM - 5:00 PM',
+    imageUrl: `https://picsum.photos/seed/horse/400/300`,
     active: true,
   },
     {
@@ -166,7 +169,8 @@ export const services: Service[] = [
     description: 'Una selección de quesos, fiambres y pan casero para disfrutar al atardecer.',
     price: 30,
     unidad: 'para 2 personas',
-    icon: 'Grape',
+    availableHours: 'A coordinar',
+    imageUrl: `https://picsum.photos/seed/picnic/400/300`,
     active: false,
   },
 ];

@@ -2,6 +2,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import Image from "next/image"
 import {
   collection,
   doc,
@@ -10,7 +11,6 @@ import {
   addDoc,
   updateDoc,
 } from "firebase/firestore"
-import * as LucideIcons from "lucide-react"
 
 import { db } from "@/firebaseConfig"
 import type { Service } from "@/lib/data"
@@ -27,10 +27,9 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
-import { PlusCircle, Edit, RefreshCw } from "lucide-react"
+import { PlusCircle, Edit, RefreshCw, Clock } from "lucide-react"
 import { ServiceDialog, type ServiceFormData } from "@/components/service-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { DynamicIcon } from "@/components/dynamic-icon"
 import { ServicesDashboard } from "@/components/services-dashboard"
 
 export default function ServicesPage() {
@@ -55,7 +54,8 @@ export default function ServicesPage() {
               description: data.description || data.descripcion,
               price: data.price ?? data.precio,
               unidad: data.unidad,
-              icon: data.icon || data.icono,
+              availableHours: data.availableHours || 'No especificado',
+              imageUrl: data.imageUrl,
               active: data.active ?? data.activo,
             }
           })
@@ -141,7 +141,8 @@ export default function ServicesPage() {
         description: service.description,
         price: service.price,
         unidad: service.unidad,
-        icon: service.icon,
+        availableHours: service.availableHours,
+        imageUrl: service.imageUrl,
         active: service.active,
       })
     })
@@ -193,9 +194,9 @@ export default function ServicesPage() {
           <CardContent>
             {isLoading ? (
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                <Skeleton className="h-64 w-full" />
-                <Skeleton className="h-64 w-full" />
-                <Skeleton className="h-64 w-full" />
+                <Skeleton className="h-80 w-full" />
+                <Skeleton className="h-80 w-full" />
+                <Skeleton className="h-80 w-full" />
               </div>
             ) : services.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">
@@ -205,28 +206,36 @@ export default function ServicesPage() {
                 </p>
               </div>
             ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {services.map((service) => (
                   <Card
                     key={service.id}
-                    className={cn(!service.active && "bg-muted/50")}
+                    className={cn(
+                      "flex flex-col overflow-hidden",
+                      !service.active && "bg-muted/50"
+                    )}
                   >
+                    {service.imageUrl && (
+                      <div className="relative aspect-video w-full">
+                        <Image
+                          src={service.imageUrl}
+                          alt={service.title}
+                          fill
+                          className="object-cover"
+                          data-ai-hint="leisure activity"
+                        />
+                      </div>
+                    )}
                     <CardHeader>
                       <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-4">
-                          <DynamicIcon
-                            name={service.icon as keyof typeof LucideIcons}
-                            className="h-8 w-8 text-primary"
-                          />
-                          <div>
-                            <CardTitle>{service.title}</CardTitle>
-                            <CardDescription className="text-lg font-semibold text-foreground">
-                              ${service.price}{" "}
-                              <span className="text-sm font-normal text-muted-foreground">
-                                / {service.unidad}
-                              </span>
-                            </CardDescription>
-                          </div>
+                        <div>
+                          <CardTitle>{service.title}</CardTitle>
+                          <CardDescription className="text-lg font-semibold text-foreground">
+                            ${service.price}{" "}
+                            <span className="text-sm font-normal text-muted-foreground">
+                              / {service.unidad}
+                            </span>
+                          </CardDescription>
                         </div>
                         <Button
                           variant="ghost"
@@ -237,10 +246,14 @@ export default function ServicesPage() {
                         </Button>
                       </div>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="flex-grow">
                       <p className="text-sm text-muted-foreground">
                         {service.description}
                       </p>
+                      <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span>{service.availableHours}</span>
+                      </div>
                     </CardContent>
                     <CardFooter>
                       <div className="flex w-full items-center justify-between">

@@ -38,9 +38,12 @@ const serviceFormSchema = z.object({
   unidad: z
     .string()
     .min(2, { message: "La unidad es requerida (ej: por hora, por persona)." }),
-  icon: z
+  availableHours: z.string().min(3, { message: "El horario es requerido." }),
+  imageUrl: z
     .string()
-    .min(2, { message: "El nombre del ícono de Lucide es requerido." }),
+    .url({ message: "Por favor ingrese una URL válida para la imagen." })
+    .optional()
+    .or(z.literal("")),
 })
 
 export type ServiceFormData = z.infer<typeof serviceFormSchema>
@@ -65,7 +68,8 @@ export function ServiceDialog({
       description: "",
       price: 0,
       unidad: "",
-      icon: "Plus",
+      availableHours: "",
+      imageUrl: "",
     },
   })
 
@@ -81,7 +85,8 @@ export function ServiceDialog({
           description: "",
           price: 0,
           unidad: "",
-          icon: "Activity",
+          availableHours: "",
+          imageUrl: "",
         })
       }
     }
@@ -171,13 +176,26 @@ export function ServiceDialog({
             </div>
             <FormField
               control={form.control}
-              name="icon"
+              name="availableHours"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Ícono (Lucide)</FormLabel>
+                  <FormLabel>Horario Disponible</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ej: 9:00 AM - 6:00 PM" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>URL de la Imagen (Opcional)</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="Ej: Boat, Bike, Utensils"
+                      placeholder="https://ejemplo.com/imagen.jpg"
                       {...field}
                     />
                   </FormControl>
