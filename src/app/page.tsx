@@ -171,6 +171,10 @@ export default function AdminLoginPage() {
                     <TableCell>{user.email}</TableCell>
                   </TableRow>
                   <TableRow>
+                    <TableCell>UID Actual</TableCell>
+                    <TableCell>{user.uid}</TableCell>
+                  </TableRow>
+                  <TableRow>
                     <TableCell>Estado de Admin</TableCell>
                     <TableCell>{isUserAdmin ? "SÍ ✅" : "NO ❌"}</TableCell>
                   </TableRow>
