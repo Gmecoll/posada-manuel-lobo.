@@ -1,3 +1,4 @@
+
 const { onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const functions = require("firebase-functions/v1");
@@ -115,5 +116,109 @@ exports.mantenimientoHabitaciones = onSchedule("every 30 minutes", async (event)
     } catch (err) {
         console.error("Error en mantenimiento de códigos:", err);
         return null;
+    }
+});
+
+// --- FUNCIÓN 3: INICIAR PAGO CON DLOCAL GO (onCall v2) ---
+exports.iniciarPagoServicio = onCall(async (request) => {
+    const data = request.data;
+    const db = admin.firestore();
+
+    // 1. Validar datos de entrada
+    const requiredFields = ['serviceId', 'amount', 'guestId', 'guestName'];
+    for (const field of requiredFields) {
+        if (!data[field]) {
+            throw new functions.https.HttpsError('invalid-argument', `Falta el campo requerido: ${field}.`);
+        }
+    }
+
+    try {
+        // 2. Obtener el título del servicio desde Firestore
+        const serviceRef = db.collection('services').doc(data.serviceId);
+        const serviceDoc = await serviceRef.get();
+        if (!serviceDoc.exists) {
+            throw new functions.https.HttpsError('not-found', 'El servicio solicitado no existe.');
+        }
+        const serviceData = serviceDoc.data();
+        const serviceTitle = serviceData.title || serviceData.nombre;
+
+        // 3. Obtener credenciales de dLocal Go desde la configuración de Firebase
+        const dlocalConfig = functions.config().dlocal;
+        if (!dlocalConfig || !dlocalConfig.login || !dlocalConfig.secret || !dlocalConfig.trans_key) {
+            console.error("La configuración de dLocal Go no está definida en Firebase Functions.");
+            throw new functions.https.HttpsError('internal', 'La configuración del procesador de pagos no está completa.');
+        }
+        const LOGIN = dlocalConfig.login;
+        const SECRET = dlocalConfig.secret;
+        const TRANS_KEY = dlocalConfig.trans_key;
+        const DLOCAL_ENDPOINT = "https://api.dlocalgo.com/v1/payments";
+
+        // 4. Preparar el cuerpo (payload) para la API de dLocal
+        const orderId = `service-${data.serviceId}-${data.guestId}-${Date.now()}`;
+        const description = `Servicio: ${serviceTitle} - Fecha: ${data.date || ''} ${data.time || ''}`.trim();
+        
+        // NOTA: dLocal requiere un email de pagador. Se usa un placeholder.
+        const guestEmail = `${data.guestName.replace(/\s+/g, '.').toLowerCase()}@posada-manuel-lobo.test`;
+
+        const body = {
+            amount: data.amount,
+            currency: 'USD',
+            country: 'UY',
+            payer: {
+                name: data.guestName,
+                email: guestEmail, 
+            },
+            order_id: orderId,
+            description: description,
+            // IMPORTANTE: Reemplazar con las URLs de tu aplicación
+            success_url: "https://<TU-APP>/payment-success",
+            back_url: "https://<TU-APP>/payment-back",
+        };
+
+        // 5. Generar firma y cabeceras
+        const idempotencyKey = crypto.randomUUID();
+        const bodyStr = JSON.stringify(body);
+        const signature = crypto.createHmac('sha256', SECRET).update(bodyStr).digest('hex');
+
+        const headers = {
+            'X-Login': LOGIN,
+            'X-Trans-Key': TRANS_KEY,
+            'X-Version': '2.1',
+            'X-Signature': `HMAC-SHA256 ${signature}`,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': idempotencyKey,
+        };
+
+        // 6. Realizar la petición a dLocal Go
+        const dlocalResponse = await axios.post(DLOCAL_ENDPOINT, body, { headers });
+
+        // 7. Procesar respuesta y retornar la URL de checkout
+        if (dlocalResponse.data && dlocalResponse.data.redirect_url) {
+            // Guardar la solicitud en Firestore para seguimiento
+            await db.collection('solicitudes_servicios').add({
+                servicioId: data.serviceId,
+                nombreServicio: serviceTitle,
+                monto: data.amount,
+                fecha: admin.firestore.FieldValue.serverTimestamp(),
+                estado_pago: 'pendiente',
+                usuarioId: data.guestId,
+                guestName: data.guestName,
+                dlocalPaymentId: dlocalResponse.data.id,
+                comments: data.comments || null
+            });
+            
+            return { checkout_url: dlocalResponse.data.redirect_url };
+        } else {
+            console.error("Respuesta de dLocal Go sin redirect_url:", dlocalResponse.data);
+            throw new functions.https.HttpsError('internal', 'La respuesta del procesador de pagos es inválida.');
+        }
+
+    } catch (error) {
+        console.error("Error al iniciar el pago con dLocal:", error.response ? error.response.data : error.message);
+        if (error instanceof functions.https.HttpsError) {
+            throw error;
+        }
+        const errorMessage = error.response?.data?.message || 'No se pudo iniciar el proceso de pago. Intente de nuevo más tarde.';
+        throw new functions.https.HttpsError('internal', errorMessage);
     }
 });
