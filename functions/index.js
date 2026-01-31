@@ -134,10 +134,11 @@ exports.iniciarPagoServicio = onCall(async (request) => {
 
     try {
         // 2. Obtener el título del servicio desde Firestore
+        console.log("Buscando ServiceID:", data.serviceId);
         const serviceRef = db.collection('services').doc(data.serviceId);
         const serviceDoc = await serviceRef.get();
         if (!serviceDoc.exists) {
-            throw new functions.https.HttpsError('not-found', 'El servicio solicitado no existe.');
+            throw new functions.https.HttpsError('not-found', 'No encontré el servicio con ID: ' + data.serviceId);
         }
         const serviceData = serviceDoc.data();
         const serviceTitle = serviceData.title || serviceData.nombre;
@@ -202,7 +203,7 @@ exports.iniciarPagoServicio = onCall(async (request) => {
             await db.collection('solicitudes_servicios').add({
                 servicioId: data.serviceId,
                 nombreServicio: serviceTitle,
-                monto: data.amount,
+                monto: data.monto,
                 fecha: admin.firestore.FieldValue.serverTimestamp(),
                 estado_pago: 'pendiente',
                 usuarioId: data.guestId,
