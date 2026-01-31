@@ -31,12 +31,12 @@ export type Booking = {
 
 export type Service = {
   id: string;
-  nombre: string;
-  descripcion: string;
-  precio: number;
+  title: string;
+  description: string;
+  price: number;
   unidad: string;
-  icono: string; // lucide-react icon name
-  activo: boolean;
+  icon: string; // lucide-react icon name
+  active: boolean;
 };
 
 export type ServiceRequest = {
@@ -144,29 +144,29 @@ export const bookings: Booking[] = [
 export const services: Service[] = [
   {
     id: 'service-1',
-    nombre: 'Alquiler de Kayak',
-    descripcion: 'Disfruta de un paseo por el Río de la Plata. Incluye remos y chaleco salvavidas.',
-    precio: 25,
+    title: 'Alquiler de Kayak',
+    description: 'Disfruta de un paseo por el Río de la Plata. Incluye remos y chaleco salvavidas.',
+    price: 25,
     unidad: 'por hora',
-    icono: 'Boat',
-    activo: true,
+    icon: 'Boat',
+    active: true,
   },
   {
     id: 'service-2',
-    nombre: 'Paseo a Caballo',
-    descripcion: 'Recorre los campos y viñedos cercanos con nuestros caballos mansos. Guía incluido.',
-    precio: 40,
+    title: 'Paseo a Caballo',
+    description: 'Recorre los campos y viñedos cercanos con nuestros caballos mansos. Guía incluido.',
+    price: 40,
     unidad: 'por persona',
-    icono: 'Sunrise',
-    activo: true,
+    icon: 'Sunrise',
+    active: true,
   },
     {
     id: 'service-3',
-    nombre: 'Canasta de Picada',
-    descripcion: 'Una selección de quesos, fiambres y pan casero para disfrutar al atardecer.',
-    precio: 30,
+    title: 'Canasta de Picada',
+    description: 'Una selección de quesos, fiambres y pan casero para disfrutar al atardecer.',
+    price: 30,
     unidad: 'para 2 personas',
-    icono: 'Grape',
-    activo: false,
+    icon: 'Grape',
+    active: false,
   },
 ];

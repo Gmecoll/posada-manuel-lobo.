@@ -28,17 +28,17 @@ import { Input } from "./ui/input"
 import { Textarea } from "./ui/textarea"
 
 const serviceFormSchema = z.object({
-  nombre: z
+  title: z
     .string()
     .min(3, { message: "El nombre debe tener al menos 3 caracteres." }),
-  descripcion: z.string().min(10, { message: "La descripción es muy corta." }),
-  precio: z.coerce
+  description: z.string().min(10, { message: "La descripción es muy corta." }),
+  price: z.coerce
     .number()
     .min(0, { message: "El precio no puede ser negativo." }),
   unidad: z
     .string()
     .min(2, { message: "La unidad es requerida (ej: por hora, por persona)." }),
-  icono: z
+  icon: z
     .string()
     .min(2, { message: "El nombre del ícono de Lucide es requerido." }),
 })
@@ -61,11 +61,11 @@ export function ServiceDialog({
   const form = useForm<ServiceFormData>({
     resolver: zodResolver(serviceFormSchema),
     defaultValues: {
-      nombre: "",
-      descripcion: "",
-      precio: 0,
+      title: "",
+      description: "",
+      price: 0,
       unidad: "",
-      icono: "Plus",
+      icon: "Plus",
     },
   })
 
@@ -77,11 +77,11 @@ export function ServiceDialog({
         form.reset(serviceToEdit)
       } else {
         form.reset({
-          nombre: "",
-          descripcion: "",
-          precio: 0,
+          title: "",
+          description: "",
+          price: 0,
           unidad: "",
-          icono: "Activity",
+          icon: "Activity",
         })
       }
     }
@@ -111,7 +111,7 @@ export function ServiceDialog({
           >
             <FormField
               control={form.control}
-              name="nombre"
+              name="title"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nombre del Servicio</FormLabel>
@@ -124,7 +124,7 @@ export function ServiceDialog({
             />
             <FormField
               control={form.control}
-              name="descripcion"
+              name="description"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Descripción</FormLabel>
@@ -141,7 +141,7 @@ export function ServiceDialog({
             <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="precio"
+                name="price"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Precio</FormLabel>
@@ -171,7 +171,7 @@ export function ServiceDialog({
             </div>
             <FormField
               control={form.control}
-              name="icono"
+              name="icon"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Ícono (Lucide)</FormLabel>

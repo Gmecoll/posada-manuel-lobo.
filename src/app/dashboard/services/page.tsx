@@ -51,7 +51,7 @@ export default function ServicesPage() {
             id: doc.id,
             ...doc.data(),
           }))
-          .sort((a, b) => a.nombre.localeCompare(b.nombre)) as Service[]
+          .sort((a, b) => (a.title || "").localeCompare(b.title || "")) as Service[]
         setServices(servicesFromDb)
         setIsLoading(false)
       },
@@ -74,14 +74,14 @@ export default function ServicesPage() {
     setIsDialogOpen(true)
   }
 
-  const handleToggleActive = async (service: Service, activo: boolean) => {
+  const handleToggleActive = async (service: Service, active: boolean) => {
     const serviceRef = doc(db, "services", service.id)
     try {
-      await updateDoc(serviceRef, { activo })
+      await updateDoc(serviceRef, { active })
       toast({
-        title: `Servicio ${activo ? "activado" : "desactivado"}`,
-        description: `El servicio "${service.nombre}" ahora está ${
-          activo ? "activo" : "inactivo"
+        title: `Servicio ${active ? "activado" : "desactivado"}`,
+        description: `El servicio "${service.title}" ahora está ${
+          active ? "activo" : "inactivo"
         }.`,
       })
     } catch (error) {
@@ -102,14 +102,14 @@ export default function ServicesPage() {
         await updateDoc(serviceRef, data)
         toast({
           title: "Servicio actualizado",
-          description: `El servicio "${data.nombre}" ha sido guardado.`,
+          description: `El servicio "${data.title}" ha sido guardado.`,
         })
       } else {
         // Creating new service
-        await addDoc(collection(db, "services"), { ...data, activo: true })
+        await addDoc(collection(db, "services"), { ...data, active: true })
         toast({
           title: "Servicio creado",
-          description: `El servicio "${data.nombre}" ha sido añadido.`,
+          description: `El servicio "${data.title}" ha sido añadido.`,
         })
       }
       setIsDialogOpen(false)
@@ -129,12 +129,12 @@ export default function ServicesPage() {
     initialServices.forEach((service) => {
       const docRef = doc(db, "services", service.id)
       batch.set(docRef, {
-        nombre: service.nombre,
-        descripcion: service.descripcion,
-        precio: service.precio,
+        title: service.title,
+        description: service.description,
+        price: service.price,
         unidad: service.unidad,
-        icono: service.icono,
-        activo: service.activo,
+        icon: service.icon,
+        active: service.active,
       })
     })
 
@@ -201,19 +201,19 @@ export default function ServicesPage() {
                 {services.map((service) => (
                   <Card
                     key={service.id}
-                    className={cn(!service.activo && "bg-muted/50")}
+                    className={cn(!service.active && "bg-muted/50")}
                   >
                     <CardHeader>
                       <div className="flex items-start justify-between">
                         <div className="flex items-center gap-4">
                           <DynamicIcon
-                            name={service.icono as keyof typeof LucideIcons}
+                            name={service.icon as keyof typeof LucideIcons}
                             className="h-8 w-8 text-primary"
                           />
                           <div>
-                            <CardTitle>{service.nombre}</CardTitle>
+                            <CardTitle>{service.title}</CardTitle>
                             <CardDescription className="text-lg font-semibold text-foreground">
-                              ${service.precio}{" "}
+                              ${service.price}{" "}
                               <span className="text-sm font-normal text-muted-foreground">
                                 / {service.unidad}
                               </span>
@@ -231,16 +231,16 @@ export default function ServicesPage() {
                     </CardHeader>
                     <CardContent>
                       <p className="text-sm text-muted-foreground">
-                        {service.descripcion}
+                        {service.description}
                       </p>
                     </CardContent>
                     <CardFooter>
                       <div className="flex w-full items-center justify-between">
                         <span className="text-sm font-medium">
-                          {service.activo ? "Activo" : "Inactivo"}
+                          {service.active ? "Activo" : "Inactivo"}
                         </span>
                         <Switch
-                          checked={service.activo}
+                          checked={service.active}
                           onCheckedChange={(checked) =>
                             handleToggleActive(service, checked)
                           }
