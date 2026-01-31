@@ -154,8 +154,9 @@ exports.iniciarPagoServicio = onCall(async (request) => {
         const DLOCAL_ENDPOINT = "https://api.dlocalgo.com/v1/payments";
 
         // 4. Preparar el cuerpo (payload) para la API de dLocal
+        const appUrl = 'https://posada-manuel-lobo.web.app';
         const orderId = `service-${data.serviceId}-${data.guestId}-${Date.now()}`;
-        const description = `Servicio: ${serviceTitle} - Fecha: ${data.date || ''} ${data.time || ''}`.trim();
+        const description = `Reserva ${serviceTitle} - ${data.date || ''} ${data.time || ''} - ${data.guestName}`.trim();
         
         // NOTA: dLocal requiere un email de pagador. Se usa un placeholder.
         const guestEmail = `${data.guestName.replace(/\s+/g, '.').toLowerCase()}@posada-manuel-lobo.test`;
@@ -170,9 +171,12 @@ exports.iniciarPagoServicio = onCall(async (request) => {
             },
             order_id: orderId,
             description: description,
-            // IMPORTANTE: Reemplazar con las URLs de tu aplicación
-            success_url: "https://<TU-APP>/payment-success",
-            back_url: "https://<TU-APP>/payment-back",
+            success_url: `${appUrl}/?payment=success`,
+            back_url: `${appUrl}/services`,
+            metadata: {
+                guestId: data.guestId,
+                roomNumber: data.roomNumber || 'N/A'
+            }
         };
 
         // 5. Generar firma y cabeceras
