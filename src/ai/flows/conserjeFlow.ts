@@ -1,5 +1,4 @@
 import { ai } from '../genkit';
-import { defineFlow } from 'genkit';
 import { z } from 'zod';
 
 export const conserjeFlow = ai.defineFlow(
@@ -28,7 +27,7 @@ SEGURIDAD Y PRIVACIDAD:
 - Si preguntan por la reserva de otro, indica que por políticas de privacidad solo hablas con el titular.
 
 TONO:
-- Colonial, amable, informativo y breve.`, // <--- Agregada la coma aquí
+- Colonial, amable, informativo y breve.`,
       config: {
         temperature: 0.3,
       },

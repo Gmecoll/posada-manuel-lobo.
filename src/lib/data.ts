@@ -29,6 +29,26 @@ export type Booking = {
   access_enabled: boolean;
 };
 
+export type Service = {
+  id: string;
+  nombre: string;
+  descripcion: string;
+  precio: number;
+  unidad: string;
+  icono: string; // lucide-react icon name
+  activo: boolean;
+};
+
+export type ServiceRequest = {
+  id: string;
+  servicioId: string;
+  nombreServicio: string;
+  monto: number;
+  fecha: any; // Firestore timestamp
+  estado_pago: 'pendiente' | 'completado';
+  usuarioId: string; // Could be guest name or booking id
+};
+
 export const guests: Guest[] = [
   { id: 'guest-1', name: 'Alice Johnson', email: 'alice@example.com' },
   { id: 'guest-2', name: 'Bob Williams', email: 'bob@example.com' },
@@ -118,5 +138,35 @@ export const bookings: Booking[] = [
     checkOutDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     status: 'Cancelled',
     access_enabled: false,
+  },
+];
+
+export const services: Service[] = [
+  {
+    id: 'service-1',
+    nombre: 'Alquiler de Kayak',
+    descripcion: 'Disfruta de un paseo por el Río de la Plata. Incluye remos y chaleco salvavidas.',
+    precio: 25,
+    unidad: 'por hora',
+    icono: 'Boat',
+    activo: true,
+  },
+  {
+    id: 'service-2',
+    nombre: 'Paseo a Caballo',
+    descripcion: 'Recorre los campos y viñedos cercanos con nuestros caballos mansos. Guía incluido.',
+    precio: 40,
+    unidad: 'por persona',
+    icono: 'Sunrise',
+    activo: true,
+  },
+    {
+    id: 'service-3',
+    nombre: 'Canasta de Picada',
+    descripcion: 'Una selección de quesos, fiambres y pan casero para disfrutar al atardecer.',
+    precio: 30,
+    unidad: 'para 2 personas',
+    icono: 'Grape',
+    activo: false,
   },
 ];
