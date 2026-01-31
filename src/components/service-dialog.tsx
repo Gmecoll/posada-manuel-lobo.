@@ -78,7 +78,14 @@ export function ServiceDialog({
   useEffect(() => {
     if (isOpen) {
       if (isEditing && serviceToEdit) {
-        form.reset(serviceToEdit)
+        form.reset({
+          title: serviceToEdit.title || "",
+          description: serviceToEdit.description || "",
+          price: serviceToEdit.price ?? 0,
+          unidad: serviceToEdit.unidad || "",
+          availableHours: serviceToEdit.availableHours || "",
+          imageUrl: serviceToEdit.imageUrl || "",
+        })
       } else {
         form.reset({
           title: "",
