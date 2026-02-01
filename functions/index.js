@@ -1,3 +1,4 @@
+
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require('firebase-admin');
@@ -33,9 +34,10 @@ exports.iniciarPagoServicio = onCall(async (request) => {
 
         const serviceData = serviceDoc.data();
         const { title, price, currency } = serviceData;
+        const paymentCurrency = currency || 'UYU'; // Default to UYU
 
-        if (!title || !price || !currency) {
-            throw new HttpsError('internal', 'El documento del servicio no tiene la información necesaria (title, price, currency).');
+        if (!title || !price) {
+            throw new HttpsError('internal', 'El documento del servicio no tiene la información necesaria (title, price).');
         }
 
         const preference = new Preference(client);
@@ -48,7 +50,7 @@ exports.iniciarPagoServicio = onCall(async (request) => {
                     title: title,
                     quantity: Number(quantity),
                     unit_price: Number(price),
-                    currency_id: currency, // USD or UYU
+                    currency_id: paymentCurrency,
                 }
             ],
             back_urls: {
@@ -71,7 +73,7 @@ exports.iniciarPagoServicio = onCall(async (request) => {
             servicioId: serviceId,
             nombreServicio: title,
             monto: Number(price) * Number(quantity),
-            currency: currency,
+            currency: paymentCurrency,
             cantidad: Number(quantity),
             fecha: admin.firestore.FieldValue.serverTimestamp(),
             estado_pago: 'pendiente',

@@ -233,7 +233,7 @@ export default function ServicesPage() {
                         <div>
                           <CardTitle>{service.title}</CardTitle>
                           <CardDescription className="text-lg font-semibold text-foreground">
-                            {service.currency === 'UYU' ? 'UY$ ' : 'U$S '}
+                            {service.currency === 'USD' ? 'U$S ' : 'UY$ '}
                             {service.price}{" "}
                             <span className="text-sm font-normal text-muted-foreground">
                               / {service.unidad}

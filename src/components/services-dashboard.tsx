@@ -187,7 +187,7 @@ export function ServicesDashboard() {
                     </TableCell>
                     <TableCell>{formatTimestamp(req.fecha)}</TableCell>
                     <TableCell>
-                      {req.currency === 'UYU' ? 'UY$' : 'U$S'}{req.monto.toFixed(2)}
+                      {req.currency === 'USD' ? 'U$S' : 'UY$'}{req.monto.toFixed(2)}
                     </TableCell>
                     <TableCell>
                       <Badge
