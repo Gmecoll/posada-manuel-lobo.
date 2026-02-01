@@ -38,6 +38,7 @@ import Image from "next/image"
 import { PlaceHolderImages } from "@/lib/placeholder-images"
 import { Logo } from "@/components/logo"
 import { useToast } from "@/hooks/use-toast"
+import { ServiceRequestNotifier } from "@/components/service-request-notifier"
 
 export default function DashboardLayout({
   children,
@@ -163,6 +164,7 @@ export default function DashboardLayout({
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
           {children}
         </main>
+        <ServiceRequestNotifier />
       </SidebarInset>
     </SidebarProvider>
   )

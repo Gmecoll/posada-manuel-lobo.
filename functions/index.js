@@ -1,4 +1,3 @@
-
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require('firebase-admin');
@@ -15,33 +14,54 @@ const client = new MercadoPagoConfig({
     accessToken: 'APP_USR-1380997564314497-012922-d7b98ce611bb36b3a5cef2ffe93e0c25-3169176624' 
 });
 
-// --- FUNCIÓN 1: PAGO CON MERCADO PAGO ---
+// --- FUNCIÓN 1: PAGO CON MERCADO PAGO Y REPORTE ---
 exports.iniciarPagoServicio = onCall(async (request) => {
     const data = request.data;
-    const { serviceId, quantity, guestName, userId } = data;
+    const { serviceId, quantity, guestName, userId, roomNumber } = data;
 
+    // Validación de parámetros
     if (!serviceId || !quantity || !guestName || !userId) {
-        throw new HttpsError('invalid-argument', 'Faltan parámetros obligatorios (serviceId, quantity, guestName, userId).');
+        throw new HttpsError('invalid-argument', 'Faltan parámetros obligatorios.');
     }
 
     try {
+        // Obtener datos del servicio desde Firestore
         const serviceRef = db.collection('services').doc(serviceId);
         const serviceDoc = await serviceRef.get();
 
         if (!serviceDoc.exists) {
-            throw new HttpsError('not-found', `El servicio con ID ${serviceId} no fue encontrado.`);
+            throw new HttpsError('not-found', 'El servicio no existe.');
         }
 
         const serviceData = serviceDoc.data();
         const { title, price, currency } = serviceData;
-        const paymentCurrency = currency || 'UYU'; // Default to UYU
+        const paymentCurrency = currency || 'UYU';
+        const totalAmount = Number(price) * Number(quantity);
 
-        if (!title || !price) {
-            throw new HttpsError('internal', 'El documento del servicio no tiene la información necesaria (title, price).');
-        }
-
-        const preference = new Preference(client);
+        // Generar ID único para la transacción y el reporte
         const externalReference = `solicitud-${Date.now()}`;
+
+        // 3. CREAR REPORTE PARA EL ADMIN PANEL (Aquí se dispara el Pop-up en el Admin)
+        const solicitudServicio = {
+            servicioId: serviceId,
+            nombreServicio: title,
+            monto: totalAmount,
+            currency: paymentCurrency,
+            cantidad: Number(quantity),
+            fecha: admin.firestore.FieldValue.serverTimestamp(),
+            estado_pago: 'pendiente', 
+            usuarioId: userId,
+            guestName: guestName,
+            roomNumber: roomNumber || "N/A",
+            external_reference: externalReference,
+            leido: false // <--- IMPORTANTE: Esto activa la alerta en el Panel Admin
+        };
+
+        // Guardamos el reporte en Firestore (esto funciona aunque el cliente no tenga reglas de escritura)
+        await db.collection('solicitudes_servicios').doc(externalReference).set(solicitudServicio);
+
+        // 4. CREAR PREFERENCIA EN MERCADO PAGO
+        const preference = new Preference(client);
         
         const preferenceData = {
             items: [
@@ -64,41 +84,26 @@ exports.iniciarPagoServicio = onCall(async (request) => {
                 guest_name: guestName,
                 service_id: serviceId,
                 user_id: userId,
+                reporte_id: externalReference
             }
         };
 
         const result = await preference.create({ body: preferenceData });
 
-        const solicitudServicio = {
-            servicioId: serviceId,
-            nombreServicio: title,
-            monto: Number(price) * Number(quantity),
-            currency: paymentCurrency,
-            cantidad: Number(quantity),
-            fecha: admin.firestore.FieldValue.serverTimestamp(),
-            estado_pago: 'pendiente',
-            usuarioId: userId,
-            guestName: guestName,
-            external_reference: externalReference
+        return { 
+            checkout_url: result.init_point,
+            reporteId: externalReference 
         };
-
-        await db.collection('solicitudes_servicios').doc(externalReference).set(solicitudServicio);
-        
-        return { checkout_url: result.init_point };
 
     } catch (error) {
         console.error("ERROR MERCADO PAGO:", error);
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', `Error al generar el link de pago: ${error.message}`);
+        if (error instanceof HttpsError) throw error;
+        throw new HttpsError('internal', `Error: ${error.message}`);
     }
 });
 
-
 // --- FUNCIÓN 2: ROTACIÓN DE CÓDIGO (SCHEDULER) ---
 exports.mantenimientoHabitaciones = onSchedule("every 30 minutes", async (event) => {
-    const db = admin.firestore();
     try {
         const roomsSnapshot = await db.collection('rooms').get();
         const batch = db.batch();
@@ -115,7 +120,7 @@ exports.mantenimientoHabitaciones = onSchedule("every 30 minutes", async (event)
         });
         
         await batch.commit();
-        console.log("Rotación de códigos completada exitosamente.");
+        console.log("Rotación exitosa.");
         return null;
     } catch (err) { 
         console.error("Error Scheduler:", err);
