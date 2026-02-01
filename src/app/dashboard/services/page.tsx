@@ -104,18 +104,19 @@ export default function ServicesPage() {
   }
 
   const handleSaveService = async (data: ServiceFormData) => {
+    const dataToSave = { ...data, currency: 'UYU' };
     try {
       if (serviceToEdit) {
         // Editing existing service
         const serviceRef = doc(db, "services", serviceToEdit.id)
-        await updateDoc(serviceRef, data)
+        await updateDoc(serviceRef, dataToSave)
         toast({
           title: "Servicio actualizado",
           description: `El servicio "${data.title}" ha sido guardado.`,
         })
       } else {
         // Creating new service
-        await addDoc(collection(db, "services"), { ...data, active: true })
+        await addDoc(collection(db, "services"), { ...dataToSave, active: true })
         toast({
           title: "Servicio creado",
           description: `El servicio "${data.title}" ha sido añadido.`,
@@ -141,7 +142,7 @@ export default function ServicesPage() {
         title: service.title,
         description: service.description,
         price: service.price,
-        currency: service.currency,
+        currency: 'UYU',
         unidad: service.unidad,
         availableHours: service.availableHours,
         imageUrl: service.imageUrl,
@@ -233,8 +234,7 @@ export default function ServicesPage() {
                         <div>
                           <CardTitle>{service.title}</CardTitle>
                           <CardDescription className="text-lg font-semibold text-foreground">
-                            {service.currency === 'USD' ? 'U$S ' : 'UY$ '}
-                            {service.price}{" "}
+                            UY$ {service.price}{" "}
                             <span className="text-sm font-normal text-muted-foreground">
                               / {service.unidad}
                             </span>
