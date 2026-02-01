@@ -57,8 +57,12 @@ export function ServicesDashboard() {
     return () => unsubscribe()
   }, [])
 
-  const totalRecaudado = requests
-    .filter((req) => req.estado_pago === "completado")
+  const totalRecaudadoUYU = requests
+    .filter((req) => req.estado_pago === "completado" && req.currency === "UYU")
+    .reduce((sum, req) => sum + req.monto, 0)
+
+  const totalRecaudadoUSD = requests
+    .filter((req) => req.estado_pago === "completado" && req.currency === "USD")
     .reduce((sum, req) => sum + req.monto, 0)
 
   const getMostRequestedService = () => {
@@ -95,7 +99,7 @@ export function ServicesDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Recaudado
+              Total Recaudado (UYU)
             </CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
@@ -104,11 +108,31 @@ export function ServicesDashboard() {
               <Skeleton className="h-8 w-24" />
             ) : (
               <div className="text-2xl font-bold">
-                ${totalRecaudado.toFixed(2)}
+                UY$ {totalRecaudadoUYU.toFixed(2)}
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Suma de pagos completados.
+              Suma de pagos completados en Pesos.
+            </p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Total Recaudado (USD)
+            </CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <div className="text-2xl font-bold">
+                U$S {totalRecaudadoUSD.toFixed(2)}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Suma de pagos completados en Dólares.
             </p>
           </CardContent>
         </Card>
@@ -132,7 +156,6 @@ export function ServicesDashboard() {
             </p>
           </CardContent>
         </Card>
-        {/* Chart can be added here later */}
       </div>
 
       <Card>
@@ -163,7 +186,9 @@ export function ServicesDashboard() {
                       {req.nombreServicio}
                     </TableCell>
                     <TableCell>{formatTimestamp(req.fecha)}</TableCell>
-                    <TableCell>${req.monto.toFixed(2)}</TableCell>
+                    <TableCell>
+                      {req.currency === 'UYU' ? 'UY$' : 'U$S'}{req.monto.toFixed(2)}
+                    </TableCell>
                     <TableCell>
                       <Badge
                         variant={

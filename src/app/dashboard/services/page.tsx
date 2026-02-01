@@ -1,7 +1,7 @@
 
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import Image from "next/image"
 import {
   collection,
@@ -53,6 +53,7 @@ export default function ServicesPage() {
               title: data.title || data.nombre,
               description: data.description || data.descripcion,
               price: data.price ?? data.precio,
+              currency: data.currency,
               unidad: data.unidad,
               availableHours: data.availableHours || 'No especificado',
               imageUrl: data.imageUrl,
@@ -140,6 +141,7 @@ export default function ServicesPage() {
         title: service.title,
         description: service.description,
         price: service.price,
+        currency: service.currency,
         unidad: service.unidad,
         availableHours: service.availableHours,
         imageUrl: service.imageUrl,
@@ -231,7 +233,8 @@ export default function ServicesPage() {
                         <div>
                           <CardTitle>{service.title}</CardTitle>
                           <CardDescription className="text-lg font-semibold text-foreground">
-                            ${service.price}{" "}
+                            {service.currency === 'UYU' ? 'UY$ ' : 'U$S '}
+                            {service.price}{" "}
                             <span className="text-sm font-normal text-muted-foreground">
                               / {service.unidad}
                             </span>

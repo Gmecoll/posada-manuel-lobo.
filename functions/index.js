@@ -7,6 +7,7 @@ const { MercadoPagoConfig, Preference } = require('mercadopago');
 if (!admin.apps.length) {
     admin.initializeApp();
 }
+const db = admin.firestore();
 
 // 2. Configuración de Mercado Pago
 const client = new MercadoPagoConfig({ 
@@ -16,47 +17,82 @@ const client = new MercadoPagoConfig({
 // --- FUNCIÓN 1: PAGO CON MERCADO PAGO ---
 exports.iniciarPagoServicio = onCall(async (request) => {
     const data = request.data;
+    const { serviceId, quantity, guestName, userId } = data;
 
-    // Validación básica de entrada
-    if (!data.amount) {
-        throw new HttpsError('invalid-argument', 'El monto es obligatorio.');
+    if (!serviceId || !quantity || !guestName || !userId) {
+        throw new HttpsError('invalid-argument', 'Faltan parámetros obligatorios (serviceId, quantity, guestName, userId).');
     }
 
     try {
+        const serviceRef = db.collection('services').doc(serviceId);
+        const serviceDoc = await serviceRef.get();
+
+        if (!serviceDoc.exists) {
+            throw new HttpsError('not-found', `El servicio con ID ${serviceId} no fue encontrado.`);
+        }
+
+        const serviceData = serviceDoc.data();
+        const { title, price, currency } = serviceData;
+
+        if (!title || !price || !currency) {
+            throw new HttpsError('internal', 'El documento del servicio no tiene la información necesaria (title, price, currency).');
+        }
+
         const preference = new Preference(client);
-
-        const result = await preference.create({
-            body: {
-                items: [
-                    {
-                        title: data.serviceTitle || 'Servicio de Posada - Alquiler',
-                        quantity: 1,
-                        unit_price: Number(data.amount),
-                        currency_id: 'USD'
-                    }
-                ],
-                back_urls: {
-                    success: "https://posada-manuel-lobo.web.app/?payment=success",
-                    failure: "https://posada-manuel-lobo.web.app/services",
-                    pending: "https://posada-manuel-lobo.web.app/services"
-                },
-                auto_return: "approved",
-                external_reference: `reserva-${Date.now()}`,
-                metadata: {
-                    guest_name: data.guestName,
-                    service_id: data.serviceId
+        const externalReference = `solicitud-${Date.now()}`;
+        
+        const preferenceData = {
+            items: [
+                {
+                    id: serviceId,
+                    title: title,
+                    quantity: Number(quantity),
+                    unit_price: Number(price),
+                    currency_id: currency, // USD or UYU
                 }
+            ],
+            back_urls: {
+                success: "https://posada-manuel-lobo.web.app/services?payment=success",
+                failure: "https://posada-manuel-lobo.web.app/services?payment=failure",
+                pending: "https://posada-manuel-lobo.web.app/services?payment=pending"
+            },
+            auto_return: "approved",
+            external_reference: externalReference,
+            metadata: {
+                guest_name: guestName,
+                service_id: serviceId,
+                user_id: userId,
             }
-        });
+        };
 
-        // Retornamos la URL de Checkout Pro
+        const result = await preference.create({ body: preferenceData });
+
+        const solicitudServicio = {
+            servicioId: serviceId,
+            nombreServicio: title,
+            monto: Number(price) * Number(quantity),
+            currency: currency,
+            cantidad: Number(quantity),
+            fecha: admin.firestore.FieldValue.serverTimestamp(),
+            estado_pago: 'pendiente',
+            usuarioId: userId,
+            guestName: guestName,
+            external_reference: externalReference
+        };
+
+        await db.collection('solicitudes_servicios').doc(externalReference).set(solicitudServicio);
+        
         return { checkout_url: result.init_point };
 
     } catch (error) {
         console.error("ERROR MERCADO PAGO:", error);
-        throw new HttpsError('internal', 'Error al generar el link de pago');
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', `Error al generar el link de pago: ${error.message}`);
     }
 });
+
 
 // --- FUNCIÓN 2: ROTACIÓN DE CÓDIGO (SCHEDULER) ---
 exports.mantenimientoHabitaciones = onSchedule("every 30 minutes", async (event) => {

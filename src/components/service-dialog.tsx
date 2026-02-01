@@ -22,6 +22,13 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import type { Service } from "@/lib/data"
 import { Input } from "./ui/input"
@@ -35,6 +42,7 @@ const serviceFormSchema = z.object({
   price: z.coerce
     .number()
     .min(0, { message: "El precio no puede ser negativo." }),
+  currency: z.enum(["USD", "UYU"], { required_error: "La moneda es requerida." }),
   unidad: z
     .string()
     .min(2, { message: "La unidad es requerida (ej: por hora, por persona)." }),
@@ -67,6 +75,7 @@ export function ServiceDialog({
       title: "",
       description: "",
       price: 0,
+      currency: "USD",
       unidad: "",
       availableHours: "",
       imageUrl: "",
@@ -82,6 +91,7 @@ export function ServiceDialog({
           title: serviceToEdit.title || "",
           description: serviceToEdit.description || "",
           price: serviceToEdit.price ?? 0,
+          currency: serviceToEdit.currency || "USD",
           unidad: serviceToEdit.unidad || "",
           availableHours: serviceToEdit.availableHours || "",
           imageUrl: serviceToEdit.imageUrl || "",
@@ -91,6 +101,7 @@ export function ServiceDialog({
           title: "",
           description: "",
           price: 0,
+          currency: "USD",
           unidad: "",
           availableHours: "",
           imageUrl: "",
@@ -166,21 +177,42 @@ export function ServiceDialog({
               />
               <FormField
                 control={form.control}
-                name="unidad"
+                name="currency"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Unidad</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="por hora, por persona..."
-                        {...field}
-                      />
-                    </FormControl>
+                    <FormLabel>Moneda</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Seleccione una moneda" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="USD">Dólares (U$S)</SelectItem>
+                        <SelectItem value="UYU">Pesos (UY$)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
               />
             </div>
+            <FormField
+              control={form.control}
+              name="unidad"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Unidad</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="por hora, por persona..."
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="availableHours"
@@ -204,6 +236,7 @@ export function ServiceDialog({
                     <Input
                       placeholder="https://ejemplo.com/imagen.jpg"
                       {...field}
+                      value={field.value ?? ''}
                     />
                   </FormControl>
                   <FormMessage />

@@ -32,6 +32,7 @@ export type Service = {
   title: string;
   description: string;
   price: number;
+  currency?: 'USD' | 'UYU';
   unidad: string;
   availableHours: string;
   imageUrl?: string;
@@ -43,6 +44,8 @@ export type ServiceRequest = {
   servicioId: string;
   nombreServicio: string;
   monto: number;
+  currency: 'USD' | 'UYU';
+  cantidad: number;
   fecha: any; // Firestore timestamp
   estado_pago: 'pendiente' | 'completado';
   usuarioId: string; // Could be guest name or booking id
@@ -145,6 +148,7 @@ export const services: Service[] = [
     title: 'Alquiler de Kayak',
     description: 'Disfruta de un paseo por el Río de la Plata. Incluye remos y chaleco salvavidas.',
     price: 25,
+    currency: 'USD',
     unidad: 'por hora',
     availableHours: '9:00 AM - 6:00 PM',
     imageUrl: `https://picsum.photos/seed/kayak/400/300`,
@@ -154,7 +158,8 @@ export const services: Service[] = [
     id: 'service-2',
     title: 'Paseo a Caballo',
     description: 'Recorre los campos y viñedos cercanos con nuestros caballos mansos. Guía incluido.',
-    price: 40,
+    price: 1500,
+    currency: 'UYU',
     unidad: 'por persona',
     availableHours: '10:00 AM - 5:00 PM',
     imageUrl: `https://picsum.photos/seed/horse/400/300`,
@@ -164,7 +169,8 @@ export const services: Service[] = [
     id: 'service-3',
     title: 'Canasta de Picada',
     description: 'Una selección de quesos, fiambres y pan casero para disfrutar al atardecer.',
-    price: 30,
+    price: 1200,
+    currency: 'UYU',
     unidad: 'para 2 personas',
     availableHours: 'A coordinar',
     imageUrl: `https://picsum.photos/seed/picnic/400/300`,
