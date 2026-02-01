@@ -1,6 +1,7 @@
 import { ai } from '../genkit';
 import { z } from 'zod';
 
+// Mantenemos la lógica de la IA intacta
 export const conserjeFlow = ai.defineFlow(
   {
     name: 'conserjeFlow',
@@ -18,6 +19,8 @@ REGLAS DE INTERACCIÓN:
 3. INFORMACIÓN ÚTIL: Cuando recomiendes lugares o comida, intenta incluir puntos de referencia, números de teléfono de contacto (si los tienes) o indica que pueden buscar el enlace en el mapa.
 4. SERVICIOS POSADA: Menciona Wi-Fi gratuito y desayuno (8:00 AM a 10:30 AM) solo si el contexto lo requiere.
 5. PROBLEMAS: Si te mencionan algún problema con las instalaciones o experiencia en el hotel, derívalo y brinda el número de atención por WhatsApp.
+
+IMPORTANTE: RESPONDE SIEMPRE EN MAYÚSCULAS PARA CONFIRMAR QUE ESTE ARCHIVO ESTÁ CONECTADO.
 
 No pongas los datos insertados entre **, le quita naturalidad a la conversación.
 
