@@ -148,27 +148,6 @@ export default function BookingsPage() {
     [toast]
   )
 
-  const handleRemoteOpen = useCallback(
-    async (booking: BookingWithDetails) => {
-      const roomRef = doc(db, "rooms", booking.roomId)
-      try {
-        await updateDoc(roomRef, { remoteUnlock: Date.now() })
-        toast({
-          title: "Apertura Remota Activada",
-          description: `La puerta de la Habitación ${booking.room.room_number} se desbloqueará momentáneamente.`,
-        })
-      } catch (error) {
-        console.error("Error triggering remote open:", error)
-        toast({
-          variant: "destructive",
-          title: "Error",
-          description: "No se pudo activar la apertura remota.",
-        })
-      }
-    },
-    [toast]
-  )
-
   const handleEdit = useCallback((booking: BookingWithDetails) => {
     setBookingToEdit(booking)
     setIsBookingDialogOpen(true)
@@ -272,7 +251,6 @@ export default function BookingsPage() {
       getColumns({
         onAccessToggle: handleAccessToggle,
         onCheckIn: handleCheckIn,
-        onRemoteOpen: handleRemoteOpen,
         onShowQr: handleShowQr,
         onEdit: handleEdit,
         onDelete: handleDelete,
@@ -280,7 +258,6 @@ export default function BookingsPage() {
     [
       handleAccessToggle,
       handleCheckIn,
-      handleRemoteOpen,
       handleShowQr,
       handleEdit,
       handleDelete,

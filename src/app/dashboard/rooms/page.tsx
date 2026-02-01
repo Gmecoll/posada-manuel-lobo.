@@ -72,8 +72,6 @@ export default function RoomsPage() {
         room_number: room.room_number,
         type: room.type,
         status: room.status,
-        remoteUnlock: null,
-        tuya_device_id: room.tuya_device_id,
         codes_pool: room.codes_pool || null,
         backup_code: room.backup_code || null,
         last_rotation: null,
@@ -201,16 +199,6 @@ export default function RoomsPage() {
                 </Badge>
               </CardContent>
               <CardFooter className="flex-col items-start gap-4 pt-6">
-                {room.tuya_device_id && room.tuya_device_id !== "XXXX" && (
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Tuya Device ID
-                    </p>
-                    <p className="font-mono text-sm font-semibold">
-                      {room.tuya_device_id}
-                    </p>
-                  </div>
-                )}
                 {room.codes_pool && room.codes_pool.length > 0 && (
                   <div className="w-full pt-4 mt-4 border-t">
                     <p className="text-xs text-muted-foreground">

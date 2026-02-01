@@ -8,7 +8,6 @@ import {
   Check,
   DoorOpen,
   Trash2,
-  KeyRound,
   Pencil,
 } from "lucide-react"
 
@@ -32,7 +31,6 @@ export type BookingWithDetails = Booking & {
 type GetColumnsProps = {
   onAccessToggle: (booking: BookingWithDetails, enabled: boolean) => void
   onCheckIn: (booking: BookingWithDetails) => void
-  onRemoteOpen: (booking: BookingWithDetails) => void
   onShowQr: (booking: BookingWithDetails) => void
   onEdit: (booking: BookingWithDetails) => void
   onDelete: (booking: BookingWithDetails) => void
@@ -41,7 +39,6 @@ type GetColumnsProps = {
 export const getColumns = ({
   onAccessToggle,
   onCheckIn,
-  onRemoteOpen,
   onShowQr,
   onEdit,
   onDelete,
@@ -168,10 +165,6 @@ export const getColumns = ({
                 <DropdownMenuItem onClick={() => onShowQr(booking)}>
                   <QrCode className="mr-2 h-4 w-4" />
                   Generar Código QR
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onRemoteOpen(booking)}>
-                  <KeyRound className="mr-2 h-4 w-4" />
-                  Apertura Remota
                 </DropdownMenuItem>
                 <DropdownMenuItem>
                   <DoorOpen className="mr-2 h-4 w-4" />

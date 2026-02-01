@@ -4,8 +4,6 @@ export type Room = {
   room_number: string;
   type: 'Standard' | 'Deluxe' | 'Suite';
   status: 'Disponible' | 'Ocupada' | 'Limpieza';
-  remoteUnlock?: number; // Timestamp for remote unlock
-  tuya_device_id?: string;
   codes_pool?: string[];
   backup_code?: string;
   last_rotation?: any;
@@ -61,27 +59,26 @@ export const guests: Guest[] = [
 
 // This is now just initial data for populating firestore. The app will read from Firestore.
 export const rooms: Room[] = [
-  { id: 'room-1', room_number: '1', type: 'Standard', status: 'Ocupada', tuya_device_id: 'XXXX' },
-  { id: 'room-2', room_number: '2', type: 'Deluxe', status: 'Ocupada', tuya_device_id: 'XXXX' },
-  { id: 'room-3', room_number: '3', type: 'Suite', status: 'Limpieza', tuya_device_id: 'XXXX' },
+  { id: 'room-1', room_number: '1', type: 'Standard', status: 'Ocupada' },
+  { id: 'room-2', room_number: '2', type: 'Deluxe', status: 'Ocupada' },
+  { id: 'room-3', room_number: '3', type: 'Suite', status: 'Limpieza' },
   { 
     id: 'room-4', 
     room_number: '4', 
     type: 'Standard', 
     status: 'Disponible', 
-    tuya_device_id: 'vdevo176964136999932',
     codes_pool: [
       '111111', '222222', '333333', '444444', '555555', '666666', '777777', '888888', '999999', '000000',
       '123456', '654321', '789012', '210987', '345678', '876543', '901234', '432109', '567890', '098765'
     ],
     backup_code: '111111'
   },
-  { id: 'room-5', room_number: '5', type: 'Deluxe', status: 'Ocupada', tuya_device_id: 'XXXX' },
-  { id: 'room-6', room_number: '6', type: 'Standard', status: 'Disponible', tuya_device_id: 'XXXX' },
-  { id: 'room-7', room_number: '7', type: 'Standard', status: 'Disponible', tuya_device_id: 'XXXX' },
-  { id: 'room-8', room_number: '8', type: 'Suite', status: 'Ocupada', tuya_device_id: 'XXXX' },
-  { id: 'room-9', room_number: '9', type: 'Deluxe', status: 'Limpieza', tuya_device_id: 'XXXX' },
-  { id: 'room-10', room_number: '10', type: 'Standard', status: 'Disponible', tuya_device_id: 'XXXX' },
+  { id: 'room-5', room_number: '5', type: 'Deluxe', status: 'Ocupada' },
+  { id: 'room-6', room_number: '6', type: 'Standard', status: 'Disponible' },
+  { id: 'room-7', room_number: '7', type: 'Standard', status: 'Disponible' },
+  { id: 'room-8', room_number: '8', type: 'Suite', status: 'Ocupada' },
+  { id: 'room-9', room_number: '9', type: 'Deluxe', status: 'Limpieza' },
+  { id: 'room-10', room_number: '10', type: 'Standard', status: 'Disponible' },
 ];
 
 export const bookings: Booking[] = [
