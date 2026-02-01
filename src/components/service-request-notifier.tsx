@@ -70,17 +70,19 @@ export function ServiceRequestNotifier() {
   }, []);
 
   useEffect(() => {
-    // Listen for unread requests to update the badge and queue
+    // Listen for requests to update the badge and queue.
+    // We fetch all sorted requests and filter for unread ones on the client
+    // to avoid needing a Firestore composite index.
     const q = query(
       collection(db, 'solicitudes_servicios'),
-      where('leido', '==', false),
       orderBy('fecha', 'asc') // Oldest first
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const unread = snapshot.docs.map(
+      const allSortedRequests = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() }) as ServiceRequest
       );
+      const unread = allSortedRequests.filter(req => req.leido === false);
       setNewRequests(unread);
     });
 
