@@ -204,11 +204,13 @@ export function ServiceRequestNotifier() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="font-headline text-2xl">¡Nueva Solicitud de Servicio!</AlertDialogTitle>
-              <AlertDialogDescription className="text-base pt-4 space-y-2 text-foreground">
-                <p><strong>Huésped:</strong> {currentRequest.guestName}</p>
-                <p><strong>Habitación:</strong> {currentRequest.roomNumber || 'N/A'}</p>
-                <p><strong>Servicio:</strong> {currentRequest.nombreServicio}</p>
-                <p><strong>Monto:</strong> UY$ {currentRequest.monto}</p>
+              <AlertDialogDescription asChild>
+                <div className="text-base pt-4 space-y-2 text-foreground">
+                  <p><strong>Huésped:</strong> {currentRequest.guestName}</p>
+                  <p><strong>Habitación:</strong> {currentRequest.roomNumber || 'N/A'}</p>
+                  <p><strong>Servicio:</strong> {currentRequest.nombreServicio}</p>
+                  <p><strong>Monto:</strong> UY$ {currentRequest.monto.toFixed(2)}</p>
+                </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
