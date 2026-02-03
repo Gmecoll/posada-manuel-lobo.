@@ -3,7 +3,7 @@
     {
       "id": "user-avatar",
       "description": "User avatar for the header",
-      "imageUrl": "https://images.unsplash.com/photo-1598139274763-0a2737a4e617?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHx3b21hbiUyMHZpbmV5YXJkfGVufDB8fHx8MTcyMDA3NjQxN3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageUrl": "https://images.unsplash.com/photo-1574708006580-13945a77f8b6?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHx3b21hbiUyMHZpbmV5YXJkfGVufDB8fHx8MTc3MDA5NTA1Nnww&ixlib=rb-4.1.0&q=80&w=1080",
       "imageHint": "woman vineyard"
     }
   ]

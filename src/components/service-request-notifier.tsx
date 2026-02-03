@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   collection,
   query,
@@ -61,13 +61,6 @@ export function ServiceRequestNotifier() {
   const [currentRequest, setCurrentRequest] = useState<ServiceRequest | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const { toast } = useToast();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const prevReqCount = useRef(0);
-
-  useEffect(() => {
-    audioRef.current = new Audio('/notification.mp3');
-    audioRef.current.load();
-  }, []);
 
   useEffect(() => {
     // Listen for requests to update the badge and queue.
@@ -105,18 +98,6 @@ export function ServiceRequestNotifier() {
 
     return () => unsubscribe();
   }, []);
-
-  // Effect to play sound only when new requests arrive
-  useEffect(() => {
-    if (newRequests.length > prevReqCount.current) {
-      if (audioRef.current) {
-        audioRef.current.play().catch((error) => {
-          console.warn('Audio playback failed. Please interact with the page first.', error);
-        });
-      }
-    }
-    prevReqCount.current = newRequests.length;
-  }, [newRequests.length]);
 
   const handleCircleClick = () => {
     if (newRequests.length > 0) {

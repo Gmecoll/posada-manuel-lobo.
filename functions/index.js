@@ -54,12 +54,11 @@ exports.mantenimientoHabitaciones = onSchedule({ schedule: "every 30 minutes", r
     return null;
 });
 
-// --- FUNCIÓN 3: IA CONSERJE (CARGA PEREZOSA PARA EVITAR TIMEOUT) ---
+// --- FUNCIÓN 3: IA CONSERJE (CARGA PEREZOSA) ---
 exports.conserjeCall = onCall({ 
     secrets: ["GOOGLE_GENAI_API_KEY"], 
     region: "us-central1" 
 }, async (request) => {
-    // Se carga el módulo dentro de la función para que no bloquee el inicio del servidor
     let aiModule;
     try { 
         aiModule = require('./conserjeflow.js'); 
@@ -72,12 +71,13 @@ exports.conserjeCall = onCall({
         const result = await aiModule.conserjeflow(request.data);
         return { response: result };
     } catch (error) {
+        console.error("Error en conserjeCall:", error);
         throw new HttpsError('internal', error.message);
     }
 });
 
 // ==========================================
-// --- FUNCIONES TTLOCK (VERSIÓN AMÉRICA) ---
+// --- FUNCIONES TTLOCK (AMÉRICA) ---
 // ==========================================
 
 // --- FUNCIÓN 4: OBTENER TOKEN (AMÉRICA) ---
@@ -101,7 +101,6 @@ exports.obtenerTokenTTLock = onCall({
         params.append('password', md5Password);
         params.append('grant_type', 'password');
         
-        // APUNTANDO A AMÉRICA
         const response = await axios.post('https://api.ttlock.com/oauth2/token', params);
         
         if (response.data.access_token) {
@@ -137,7 +136,6 @@ exports.abrirCerraduraRemote = onCall({
         params.append('lockId', lockId);
         params.append('date', Date.now().toString());
 
-        // URL DE AMÉRICA
         const response = await axios.post('https://api.ttlock.com/v3/lock/unlock', params);
         return { success: response.data.errcode === 0, error: response.data.errmsg };
     } catch (error) {
@@ -145,7 +143,7 @@ exports.abrirCerraduraRemote = onCall({
     }
 });
 
-// --- FUNCIÓN 6: LISTAR CERRADURAS (AMÉRICA + DIAGNÓSTICO) ---
+// --- FUNCIÓN 6: LISTAR CERRADURAS (ADAPTADA Y MAPEADA) ---
 exports.listarCerradurasTTLock = onCall({ 
     region: "us-central1",
     secrets: ["TTLOCK_CLIENT_ID"] 
@@ -157,15 +155,17 @@ exports.listarCerradurasTTLock = onCall({
 
         const { accessToken } = authDoc.data();
         
-        // URL DE AMÉRICA
         const response = await axios.get('https://api.ttlock.com/v3/lock/list', {
             params: { clientId, accessToken, pageNo: 1, pageSize: 20, date: Date.now().toString() }
         });
 
         console.log("--- RESPUESTA CRUDA AMÉRICA ---", JSON.stringify(response.data));
 
-        if (response.data.errcode !== 0) return { success: false, error: response.data.errmsg };
+        if (response.data.errcode !== 0) {
+            return { success: false, error: response.data.errmsg };
+        }
 
+        // Mapeo de datos para el Frontend
         const locks = (response.data.list || []).map(l => ({ 
             id: l.lockId, 
             nombre: l.lockAlias || l.lockName, 
@@ -173,8 +173,14 @@ exports.listarCerradurasTTLock = onCall({
             online: l.hasGateway === 1 
         }));
 
-        return { success: true, locks };
+        // Retorno de objeto plano para evitar problemas de serialización
+        return { 
+            success: true, 
+            locks: locks 
+        };
+        
     } catch (error) {
+        console.error("Error en listarCerradurasTTLock:", error);
         throw new HttpsError('internal', error.message);
     }
 });
