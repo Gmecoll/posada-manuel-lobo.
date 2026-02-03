@@ -1,3 +1,4 @@
+
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require('firebase-admin');
@@ -17,6 +18,7 @@ exports.iniciarPagoServicio = onCall({
 }, async (request) => {
     try {
         if (!process.env.MERCADOPAGO_ACCESSTOKEN) {
+            console.error("CRITICAL: MERCADOPAGO_ACCESSTOKEN secret is not set.");
             throw new HttpsError('failed-precondition', 'La configuración de Mercado Pago no está completa.');
         }
         const client = new MercadoPagoConfig({ accessToken: process.env.MERCADOPAGO_ACCESSTOKEN });
@@ -88,6 +90,7 @@ exports.obtenerTokenTTLock = onCall({
     region: "us-central1",
     secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_CLIENT_SECRET"] 
 }, async (request) => {
+    console.log("Executing obtenerTokenTTLock function.");
     const { username, passwordRaw } = request.data || {};
     const clientId = process.env.TTLOCK_CLIENT_ID;
     const clientSecret = process.env.TTLOCK_CLIENT_SECRET;
@@ -96,6 +99,7 @@ exports.obtenerTokenTTLock = onCall({
         throw new HttpsError('invalid-argument', 'El nombre de usuario y la contraseña son requeridos.');
     }
     if (!clientId || !clientSecret) {
+        console.error("CRITICAL: TTLock secrets (CLIENT_ID or CLIENT_SECRET) are not set.");
         throw new HttpsError('failed-precondition', 'La configuración del servidor para TTLock está incompleta. Contacte a soporte.');
     }
     const md5Password = crypto.createHash('md5').update(passwordRaw).digest('hex');
@@ -107,10 +111,12 @@ exports.obtenerTokenTTLock = onCall({
         params.append('username', username);
         params.append('password', md5Password);
         params.append('grant_type', 'password');
-
+        
+        console.log(`Requesting TTLock token for user: ${username}`);
         const response = await axios.post('https://euapi.ttlock.com/oauth2/token', params);
         
         if (response.data.error) {
+            console.error(`TTLock API Error on token auth: ${response.data.error_description}`);
             return { success: false, error: `${response.data.error}: ${response.data.error_description}` };
         }
 
@@ -120,14 +126,22 @@ exports.obtenerTokenTTLock = onCall({
                 uid: response.data.uid,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
+            console.log(`Successfully obtained and stored token for user: ${username}`);
             return { success: true };
         }
+        
+        console.warn("Unexpected response from TTLock on token auth:", response.data);
         return { success: false, error: response.data.errmsg || 'Respuesta inesperada del servidor de TTLock.' };
     } catch (error) {
-        console.error("Error al obtener token de TTLock:", error.response ? error.response.data : error.message);
-        const errorData = error.response?.data;
-        const errorMessage = errorData ? `${errorData.error}: ${errorData.error_description}` : error.message;
-        throw new HttpsError('internal', 'No se pudo obtener el token de TTLock. ' + errorMessage);
+        if (error.response) {
+            console.error("Error Response from TTLock API (token):", JSON.stringify(error.response.data));
+            const errorData = error.response?.data;
+            const errorMessage = errorData ? `${errorData.error}: ${errorData.error_description}` : 'Error del servidor de TTLock.';
+            throw new HttpsError('internal', 'No se pudo obtener el token de TTLock. ' + errorMessage);
+        } else {
+            console.error('Error setting up request to TTLock API (token):', error.message);
+            throw new HttpsError('internal', 'No se pudo conectar con el servicio de TTLock para obtener el token.');
+        }
     }
 });
 
@@ -136,50 +150,83 @@ exports.abrirCerraduraRemote = onCall({
     region: "us-central1",
     secrets: ["TTLOCK_CLIENT_ID"] 
 }, async (request) => {
-    const { lockId } = request.data || {};
+    console.log("Executing abrirCerraduraRemote function.");
     const clientId = process.env.TTLOCK_CLIENT_ID;
-    const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
-    
-    if (!authDoc.exists || !authDoc.data()?.accessToken) {
-        throw new HttpsError('failed-precondition', 'No vinculado a TTLock o token no encontrado. Por favor, vincule la cuenta de nuevo.');
+    if (!clientId) {
+        console.error("CRITICAL: TTLOCK_CLIENT_ID secret is not set in the environment.");
+        throw new HttpsError('failed-precondition', 'La configuración del servidor (Client ID) está incompleta.');
     }
 
-    const { accessToken } = authDoc.data();
     try {
+        const { lockId } = request.data || {};
+        if (!lockId) {
+            throw new HttpsError('invalid-argument', 'El ID de la cerradura (lockId) es requerido.');
+        }
+
+        const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
+        if (!authDoc.exists || !authDoc.data()?.accessToken) {
+            throw new HttpsError('failed-precondition', 'No vinculado a TTLock o token no encontrado. Por favor, vincule la cuenta de nuevo.');
+        }
+
+        const { accessToken } = authDoc.data();
         const params = new URLSearchParams();
         params.append('clientId', clientId);
         params.append('accessToken', accessToken);
         params.append('lockId', lockId);
         params.append('date', Date.now().toString());
 
+        console.log(`Attempting to unlock lockId: ${lockId}`);
         const response = await axios.post('https://euapi.ttlock.com/v3/lock/unlock', params);
         
         if (response.data.errcode !== 0) {
+            console.error(`TTLock API Error on unlock: ${response.data.errmsg}`);
             return { success: false, error: response.data.errmsg || 'Error desconocido de TTLock' };
         }
         
+        console.log(`Successfully unlocked lockId: ${lockId}`);
         return { success: true, error: null };
     } catch (error) {
-        console.error("Error al abrir cerradura en TTLock:", error.response ? error.response.data : error.message);
-        throw new HttpsError('internal', 'Fallo al intentar abrir la cerradura: ' + (error.response?.data?.errmsg || error.message));
+        if (error instanceof HttpsError) throw error;
+        
+        if (error.response) {
+            console.error("Error Response from TTLock API (unlock):", JSON.stringify(error.response.data));
+        } else if (error.request) {
+            console.error("No response received from TTLock API (unlock):", error.request);
+        } else {
+            console.error('Error setting up request to TTLock API (unlock):', error.message);
+        }
+        throw new HttpsError('internal', 'Fallo al intentar abrir la cerradura. Revise los logs.');
     }
 });
+
 
 // --- FUNCIÓN 6: LISTAR CERRADURAS (CORREGIDA) ---
 exports.listarCerradurasTTLock = onCall({ 
     region: "us-central1",
     secrets: ["TTLOCK_CLIENT_ID"] 
 }, async (request) => {
-    const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
-    if (!authDoc.exists || !authDoc.data()?.accessToken) {
-        throw new HttpsError('failed-precondition', 'No vinculado a TTLock o token no encontrado. Por favor, vincule la cuenta de nuevo.');
+    console.log("Executing listarCerradurasTTLock function.");
+
+    const clientId = process.env.TTLOCK_CLIENT_ID;
+    if (!clientId) {
+        console.error("CRITICAL: TTLOCK_CLIENT_ID secret is not set in the environment.");
+        throw new HttpsError('failed-precondition', 'La configuración del servidor (Client ID) está incompleta. Contacte a soporte.');
     }
-    
-    const { accessToken } = authDoc.data();
+
     try {
+        const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
+        
+        if (!authDoc.exists || !authDoc.data()?.accessToken) {
+            console.warn("Attempted to list locks without a valid token.");
+            throw new HttpsError('failed-precondition', 'No vinculado a TTLock o token no encontrado. Por favor, vincule la cuenta de nuevo.');
+        }
+    
+        const { accessToken } = authDoc.data();
+        
+        console.log("Attempting to list locks from TTLock API.");
         const response = await axios.get('https://euapi.ttlock.com/v3/lock/list', {
             params: { 
-                clientId: process.env.TTLOCK_CLIENT_ID, 
+                clientId, 
                 accessToken, 
                 pageNo: 1, 
                 pageSize: 20, 
@@ -188,20 +235,29 @@ exports.listarCerradurasTTLock = onCall({
         });
         
         if (response.data.errcode !== 0) {
+            console.error(`TTLock API Error on list: ${response.data.errmsg}`);
             return { success: false, error: response.data.errmsg || 'Error desconocido de TTLock' };
         }
 
-        return { 
-            success: true, 
-            locks: (response.data.list || []).map(l => ({ 
-                id: l.lockId, 
-                nombre: l.lockAlias || l.lockName, 
-                bateria: l.electricQuantity, 
-                online: l.hasGateway === 1 
-            })) 
-        };
+        const locks = (response.data.list || []).map(l => ({ 
+            id: l.lockId, 
+            nombre: l.lockAlias || l.lockName, 
+            bateria: l.electricQuantity, 
+            online: l.hasGateway === 1 
+        }));
+
+        console.log(`Successfully fetched ${locks.length} locks.`);
+        return { success: true, locks };
+
     } catch (error) {
-        console.error("Error al listar cerraduras de TTLock:", error.response ? error.response.data : error.message);
-        throw new HttpsError('internal', 'No se pudo conectar con el servicio de TTLock: ' + (error.response?.data?.errmsg || error.message));
+        if (error.response) {
+            console.error("Error Response from TTLock API:", JSON.stringify(error.response.data));
+        } else if (error.request) {
+            console.error("No response received from TTLock API:", error.request);
+        } else {
+            console.error('Error setting up request to TTLock API:', error.message);
+        }
+        
+        throw new HttpsError('internal', 'No se pudo conectar con el servicio de TTLock. Revise los logs de la función para más detalles.');
     }
 });
