@@ -12,7 +12,7 @@ const firebaseConfig = {
   appId: "1:797368553258:web:78564b78426f4f22c6014d"
 };
 
-// Initialize Firebase only if it hasn't been initialized yet
+// Inicialización segura para Next.js
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 const db = getFirestore(app);

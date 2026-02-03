@@ -15,17 +15,17 @@ const conserjeflow = ai.defineFlow(
     // 2. EXTRACCIÓN Y VALIDACIÓN DE LA PREGUNTA
     const pregunta = typeof payload === 'string' 
       ? payload 
-      : (payload?.preguntaUsuario || "");
+      : (payload?.message || "");
     
     // Si la pregunta llega vacía, evitamos llamar a Gemini para no causar error
     if (!pregunta || pregunta.trim().length === 0) {
-      console.error("Error: preguntaUsuario llegó vacío al backend.", input);
+      console.error("Error: el campo 'message' llegó vacío al backend.", input);
       return "Lo siento, no pude recibir tu mensaje. ¿Podrías intentar escribirlo de nuevo?";
     }
 
     // 3. FORMATEO DEL HISTORIAL
     let history = [];
-    const rawHistory = payload?.historial;
+    const rawHistory = payload?.history;
 
     if (Array.isArray(rawHistory)) {
       history = rawHistory.map(m => ({

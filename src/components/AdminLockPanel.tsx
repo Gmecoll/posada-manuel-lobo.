@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { Lock, Unlock, RefreshCw, Battery, Signal, WifiOff } from 'lucide-react';
