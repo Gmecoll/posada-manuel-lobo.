@@ -10,9 +10,15 @@ if (!admin.apps.length) {
 }
 const db = admin.firestore();
 
+// CONFIGURACIÓN DE SEGURIDAD
+const ADMIN_EMAIL = "gmecollg@gmail.com";
+
+// ==========================================
 // --- FUNCIÓN 1: PAGO CON MERCADO PAGO ---
+// ==========================================
 exports.iniciarPagoServicio = onCall({ 
     region: "us-central1",
+    cors: true,
     secrets: ["MERCADOPAGO_ACCESSTOKEN"] 
 }, async (request) => {
     try {
@@ -38,8 +44,13 @@ exports.iniciarPagoServicio = onCall({
     }
 });
 
-// --- FUNCIÓN 2: ROTACIÓN DE CÓDIGO ---
-exports.mantenimientoHabitaciones = onSchedule({ schedule: "every 30 minutes", region: "us-central1" }, async (event) => {
+// ==========================================
+// --- FUNCIÓN 2: ROTACIÓN DE CÓDIGO (TTL) ---
+// ==========================================
+exports.mantenimientoHabitaciones = onSchedule({ 
+    schedule: "every 30 minutes", 
+    region: "us-central1" 
+}, async (event) => {
     const ahora = new Date();
     const locksSnap = await db.collection('locks').get();
     for (const doc of locksSnap.docs) {
@@ -47,17 +58,24 @@ exports.mantenimientoHabitaciones = onSchedule({ schedule: "every 30 minutes", r
         if (data.tempCode && data.expiryDate) {
             const expiry = data.expiryDate.toDate();
             if (ahora > expiry) {
-                await doc.ref.update({ tempCode: null, expiryDate: null, status: 'vacante' });
+                await doc.ref.update({ 
+                    tempCode: null, 
+                    expiryDate: null, 
+                    status: 'vacante' 
+                });
             }
         }
     }
     return null;
 });
 
-// --- FUNCIÓN 3: IA CONSERJE (CARGA PEREZOSA) ---
+// ==========================================
+// --- FUNCIÓN 3: IA CONSERJE ---
+// ==========================================
 exports.conserjeCall = onCall({ 
     secrets: ["GOOGLE_GENAI_API_KEY"], 
-    region: "us-central1" 
+    region: "us-central1",
+    cors: true
 }, async (request) => {
     let aiModule;
     try { 
@@ -77,20 +95,25 @@ exports.conserjeCall = onCall({
 });
 
 // ==========================================
-// --- FUNCIONES TTLOCK (AMÉRICA) ---
+// --- FUNCIONES TTLOCK (SECRET MANAGER) ---
 // ==========================================
 
-// --- FUNCIÓN 4: OBTENER TOKEN (AMÉRICA) ---
+// --- FUNCIÓN 4: OBTENER TOKEN (DINÁMICO) ---
 exports.obtenerTokenTTLock = onCall({ 
     region: "us-central1",
+    cors: true,
     secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_CLIENT_SECRET"] 
 }, async (request) => {
+    // Solo el administrador puede renovar tokens
+    if (!request.auth || request.auth.token.email !== ADMIN_EMAIL) {
+        throw new HttpsError('permission-denied', 'No autorizado');
+    }
+
     const { username, passwordRaw } = request.data || {};
     const clientId = process.env.TTLOCK_CLIENT_ID;
     const clientSecret = process.env.TTLOCK_CLIENT_SECRET;
 
     if (!username || !passwordRaw) throw new HttpsError('invalid-argument', 'Faltan credenciales.');
-    
     const md5Password = crypto.createHash('md5').update(passwordRaw).digest('hex');
 
     try {
@@ -113,74 +136,79 @@ exports.obtenerTokenTTLock = onCall({
         }
         return { success: false, error: response.data.error_description || 'Error en autenticación' };
     } catch (error) {
-        throw new HttpsError('internal', error.message);
+        return { success: false, error: error.message };
     }
 });
 
-// --- FUNCIÓN 5: APERTURA REMOTA (AMÉRICA) ---
+// --- FUNCIÓN 5: APERTURA REMOTA ---
 exports.abrirCerraduraRemote = onCall({ 
     region: "us-central1",
-    secrets: ["TTLOCK_CLIENT_ID"] 
+    cors: true,
+    invoker: "public",
+    secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_ACCESS_TOKEN"]
 }, async (request) => {
-    const clientId = process.env.TTLOCK_CLIENT_ID;
-    const { lockId } = request.data || {};
+    
+    // Validación de Sesión y Email Admin
+    if (!request.auth) throw new HttpsError('unauthenticated', 'No estás logueado');
+    if (request.auth.token.email !== ADMIN_EMAIL) {
+        throw new HttpsError('permission-denied', 'Permiso denegado para esta cuenta');
+    }
+
+    const { lockId } = request.data;
+    if (!lockId) throw new HttpsError('invalid-argument', 'Falta el lockId');
 
     try {
-        const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
-        if (!authDoc.exists) throw new HttpsError('failed-precondition', 'No vinculado.');
+        const response = await axios.post('https://api.ttlock.com/v3/lock/unlock', null, {
+            params: {
+                clientId: process.env.TTLOCK_CLIENT_ID,
+                accessToken: process.env.TTLOCK_ACCESS_TOKEN,
+                lockId: lockId,
+                date: Date.now()
+            }
+        });
 
-        const { accessToken } = authDoc.data();
-        const params = new URLSearchParams();
-        params.append('clientId', clientId);
-        params.append('accessToken', accessToken);
-        params.append('lockId', lockId);
-        params.append('date', Date.now().toString());
+        if (response.data.errcode !== 0) {
+            return { success: false, error: response.data.errmsg, code: response.data.errcode };
+        }
 
-        const response = await axios.post('https://api.ttlock.com/v3/lock/unlock', params);
-        return { success: response.data.errcode === 0, error: response.data.errmsg };
+        return { success: true, data: response.data };
+
     } catch (error) {
-        throw new HttpsError('internal', error.message);
+        console.error("Fallo en apertura:", error.message);
+        return { success: false, error: error.message };
     }
 });
 
-// --- FUNCIÓN 6: LISTAR CERRADURAS (ADAPTADA Y MAPEADA) ---
+// --- FUNCIÓN 6: LISTAR CERRADURAS ---
 exports.listarCerradurasTTLock = onCall({ 
     region: "us-central1",
-    secrets: ["TTLOCK_CLIENT_ID"] 
+    cors: true,
+    invoker: "public",
+    secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_ACCESS_TOKEN"]
 }, async (request) => {
-    const clientId = process.env.TTLOCK_CLIENT_ID;
-    try {
-        const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
-        if (!authDoc.exists) throw new HttpsError('failed-precondition', 'Token no encontrado.');
+    // Validación de Sesión y Email Admin
+    if (!request.auth || request.auth.token.email !== ADMIN_EMAIL) {
+        throw new HttpsError('permission-denied', 'Acceso denegado');
+    }
 
-        const { accessToken } = authDoc.data();
-        
+    try {
         const response = await axios.get('https://api.ttlock.com/v3/lock/list', {
-            params: { clientId, accessToken, pageNo: 1, pageSize: 20, date: Date.now().toString() }
+            params: {
+                clientId: process.env.TTLOCK_CLIENT_ID,
+                accessToken: process.env.TTLOCK_ACCESS_TOKEN,
+                pageNo: 1,
+                pageSize: 20,
+                date: Date.now()
+            }
         });
 
-        console.log("--- RESPUESTA CRUDA AMÉRICA ---", JSON.stringify(response.data));
-
-        if (response.data.errcode !== 0) {
+        if (response.data.errcode && response.data.errcode !== 0) {
             return { success: false, error: response.data.errmsg };
         }
 
-        // Mapeo de datos para el Frontend
-        const locks = (response.data.list || []).map(l => ({ 
-            id: l.lockId, 
-            nombre: l.lockAlias || l.lockName, 
-            bateria: l.electricQuantity, 
-            online: l.hasGateway === 1 
-        }));
+        return { success: true, list: response.data.list || [] };
 
-        // Retorno de objeto plano para evitar problemas de serialización
-        return { 
-            success: true, 
-            locks: locks 
-        };
-        
     } catch (error) {
-        console.error("Error en listarCerradurasTTLock:", error);
-        throw new HttpsError('internal', error.message);
+        return { success: false, error: error.message };
     }
 });

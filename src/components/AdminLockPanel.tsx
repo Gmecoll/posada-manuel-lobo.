@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { Lock, Unlock, RefreshCw, Battery, Signal, WifiOff, Fingerprint } from 'lucide-react';
+import { Lock, Unlock, RefreshCw, Battery, Signal, WifiOff, Fingerprint, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { functions } from '@/firebaseConfig';
 
 const AdminLockPanel = () => {
@@ -10,62 +10,59 @@ const AdminLockPanel = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
+  
+  // 1. Estado para el feedback visual
+  const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
-  // Evita errores de hidratación en Next.js
   useEffect(() => {
     setMounted(true);
+    fetchLocks();
   }, []);
 
-  // 1. Función optimizada con Debug para detectar por qué no aparecen
   const fetchLocks = async () => {
     setLoading(true);
+    setFeedback(null); // Limpiar feedback al refrescar
     try {
       const listarCerraduras = httpsCallable(functions, 'listarCerradurasTTLock');
       const result: any = await listarCerraduras();
       
-      // --- LOGS CRUCIALES PARA DEPURAR EN F12 ---
-      console.log("--- DEBUG FRONTEND ---");
-      console.log("Resultado crudo del servidor:", result);
-      console.log("Contenido de result.data:", result.data);
-
       if (result.data && result.data.success) {
-        // Forzamos que sea un array y extraemos la propiedad correcta
-        const listaCerraduras = Array.isArray(result.data.locks) ? result.data.locks : [];
-        
-        console.log(`¡Éxito! Se procesaron ${listaCerraduras.length} cerraduras.`);
-        setLocks(listaCerraduras);
-        
-        if (listaCerraduras.length === 0) {
-          alert("El servidor respondió 'success', pero la lista de cerraduras llegó vacía. Revisa la vinculación de la cuenta.");
-        }
+        const rawList = Array.isArray(result.data.list) ? result.data.list : [];
+        const listaMapeada = rawList.map((l: any) => ({
+          id: l.lockId,
+          nombre: l.lockAlias || l.lockName || "Cerradura Principal",
+          bateria: l.electricQuantity || 0,
+          online: l.hasGateway === 1 
+        }));
+        setLocks(listaMapeada);
       } else {
-        const errorMsg = result.data?.error || "Error desconocido en el servidor";
-        console.error("Error reportado por el backend:", errorMsg);
-        alert("Error de TTLock: " + errorMsg);
+        setFeedback({ msg: "No se pudo sincronizar la lista de cerraduras", type: 'error' });
       }
     } catch (error: any) {
-      console.error("Error crítico de invocación:", error);
-      alert("Error de conexión: " + (error.message || "No se pudo contactar con la función"));
+      setFeedback({ msg: "Error de conexión con el servidor", type: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
-  // 2. Función para abrir una cerradura específica
   const handleUnlock = async (lockId: number) => {
     setActionLoading(lockId);
+    setFeedback(null); // Limpiar mensajes previos antes de la acción
+    
     try {
-      const abrirPuerta = httpsCallable(functions, 'abrirCerraduraRemote');
-      const result: any = await abrirPuerta({ lockId });
+      const abrir = httpsCallable(functions, 'abrirCerraduraRemote');
+      const res: any = await abrir({ lockId });
       
-      if (result.data && result.data.success) {
-        alert("✅ Puerta abierta con éxito");
+      if (res.data && res.data.success) {
+        setFeedback({ msg: "✅ Puerta abierta con éxito", type: 'success' });
+        // Opcional: Auto-limpiar el éxito después de 5 segundos
+        setTimeout(() => setFeedback(null), 5000);
       } else {
-        alert("❌ Error: " + (result.data?.error || "No se pudo abrir la puerta"));
+        const errorMsg = res.data?.error || "Error desconocido";
+        setFeedback({ msg: `❌ Error: ${errorMsg}`, type: 'error' });
       }
-    } catch (error: any) {
-      console.error("Error en apertura remota:", error);
-      alert("Error en el servidor: " + error.message);
+    } catch (e: any) {
+      setFeedback({ msg: "🔥 Error crítico de red o permisos", type: 'error' });
     } finally {
       setActionLoading(null);
     }
@@ -84,23 +81,39 @@ const AdminLockPanel = () => {
           <p className="text-slate-400 text-xs mt-1 font-medium uppercase tracking-wider">Posada Manuel Lobo</p>
         </div>
         
-        <button 
-          onClick={fetchLocks}
-          disabled={loading}
-          className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-all disabled:opacity-50 group"
-          title="Refrescar lista"
-        >
-          <RefreshCw className={`w-5 h-5 text-cyan-400 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
-        </button>
+        <div className="flex gap-2">
+          <button 
+            onClick={fetchLocks}
+            disabled={loading}
+            className="p-3 bg-white/5 hover:bg-white/10 rounded-full transition-all disabled:opacity-50 group"
+          >
+            <RefreshCw className={`w-5 h-5 text-cyan-400 ${loading ? 'animate-spin' : 'group-hover:rotate-180 transition-transform duration-500'}`} />
+          </button>
+        </div>
       </div>
 
+      {/* 2. Visualización del Feedback */}
+      {feedback && (
+        <div className={`mb-6 p-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 border ${
+          feedback.type === 'success' 
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+            : 'bg-red-500/10 border-red-500/20 text-red-400'
+        }`}>
+          {feedback.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
+          <span className="text-sm font-medium">{feedback.msg}</span>
+          <button onClick={() => setFeedback(null)} className="ml-auto opacity-50 hover:opacity-100 text-xs">esc</button>
+        </div>
+      )}
+
       <div className="grid gap-4">
-        {/* Renderizado condicional del mensaje de vacío */}
         {locks.length === 0 && !loading ? (
           <div className="text-center py-12 border border-dashed border-white/10 rounded-3xl bg-white/[0.02]">
             <p className="text-slate-500 text-sm italic">
               No hay dispositivos detectados.<br/>
-              <span className="text-cyan-500/50 not-italic text-xs font-bold uppercase tracking-widest mt-2 block cursor-pointer hover:text-cyan-400 transition-colors" onClick={fetchLocks}>
+              <span 
+                className="text-cyan-500/50 not-italic text-xs font-bold uppercase tracking-widest mt-2 block cursor-pointer hover:text-cyan-400 transition-colors" 
+                onClick={fetchLocks}
+              >
                 Pulsa aquí para sincronizar
               </span>
             </p>
@@ -151,7 +164,7 @@ const AdminLockPanel = () => {
         )}
       </div>
       
-      {loading && <p className="text-center text-cyan-400 text-[10px] mt-6 tracking-widest animate-pulse font-bold uppercase">Validando credenciales en América...</p>}
+      {loading && <p className="text-center text-cyan-400 text-[10px] mt-6 tracking-widest animate-pulse font-bold uppercase">Sincronizando cerraduras...</p>}
     </div>
   );
 };

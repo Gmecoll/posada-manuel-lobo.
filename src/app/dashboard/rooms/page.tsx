@@ -75,6 +75,7 @@ export default function RoomsPage() {
         codes_pool: room.codes_pool || null,
         backup_code: room.backup_code || null,
         last_rotation: null,
+        lockId: room.lockId || null,
       })
     })
 
@@ -199,6 +200,15 @@ export default function RoomsPage() {
                 </Badge>
               </CardContent>
               <CardFooter className="flex-col items-start gap-4 pt-6">
+                <div className="w-full">
+                  <p className="text-xs text-muted-foreground">
+                    Cód. Cerradura
+                  </p>
+                  <p className="font-mono text-base font-bold tracking-wider">
+                    {room.lockId || "Sin Definir"}
+                  </p>
+                </div>
+
                 {room.codes_pool && room.codes_pool.length > 0 && (
                   <div className="w-full pt-4 mt-4 border-t">
                     <p className="text-xs text-muted-foreground">

@@ -1,6 +1,7 @@
 
 export type Room = {
   id: string;
+  lockId?: string;
   room_number: string;
   type: 'Standard' | 'Deluxe' | 'Suite';
   status: 'Disponible' | 'Ocupada' | 'Limpieza';
@@ -69,7 +70,8 @@ export const rooms: Room[] = [
     id: 'room-4', 
     room_number: '4', 
     type: 'Standard', 
-    status: 'Disponible', 
+    status: 'Disponible',
+    lockId: '29074468',
     codes_pool: [
       '111111', '222222', '333333', '444444', '555555', '666666', '777777', '888888', '999999', '000000',
       '123456', '654321', '789012', '210987', '345678', '876543', '901234', '432109', '567890', '098765'
