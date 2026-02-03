@@ -75,7 +75,7 @@ export default function RoomsPage() {
         codes_pool: room.codes_pool || null,
         backup_code: room.backup_code || null,
         last_rotation: null,
-        lockId: room.lockId || null,
+        lockId: room.lockId || "Sin Definir",
       })
     })
 
@@ -204,7 +204,14 @@ export default function RoomsPage() {
                   <p className="text-xs text-muted-foreground">
                     Cód. Cerradura
                   </p>
-                  <p className="font-mono text-base font-bold tracking-wider">
+                  <p
+                    className={cn(
+                      "font-mono text-base font-bold tracking-wider",
+                      !room.lockId || room.lockId === "Sin Definir"
+                        ? "text-muted-foreground"
+                        : "text-foreground"
+                    )}
+                  >
                     {room.lockId || "Sin Definir"}
                   </p>
                 </div>

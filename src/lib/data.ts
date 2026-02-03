@@ -63,9 +63,9 @@ export const guests: Guest[] = [
 
 // This is now just initial data for populating firestore. The app will read from Firestore.
 export const rooms: Room[] = [
-  { id: 'room-1', room_number: '1', type: 'Standard', status: 'Ocupada' },
-  { id: 'room-2', room_number: '2', type: 'Deluxe', status: 'Ocupada' },
-  { id: 'room-3', room_number: '3', type: 'Suite', status: 'Limpieza' },
+  { id: 'room-1', room_number: '1', type: 'Standard', status: 'Ocupada', lockId: "Sin Definir" },
+  { id: 'room-2', room_number: '2', type: 'Deluxe', status: 'Ocupada', lockId: "Sin Definir" },
+  { id: 'room-3', room_number: '3', type: 'Suite', status: 'Limpieza', lockId: "Sin Definir" },
   { 
     id: 'room-4', 
     room_number: '4', 
@@ -78,12 +78,12 @@ export const rooms: Room[] = [
     ],
     backup_code: '111111'
   },
-  { id: 'room-5', room_number: '5', type: 'Deluxe', status: 'Ocupada' },
-  { id: 'room-6', room_number: '6', type: 'Standard', status: 'Disponible' },
-  { id: 'room-7', room_number: '7', type: 'Standard', status: 'Disponible' },
-  { id: 'room-8', room_number: '8', type: 'Suite', status: 'Ocupada' },
-  { id: 'room-9', room_number: '9', type: 'Deluxe', status: 'Limpieza' },
-  { id: 'room-10', room_number: '10', type: 'Standard', status: 'Disponible' },
+  { id: 'room-5', room_number: '5', type: 'Deluxe', status: 'Ocupada', lockId: "Sin Definir" },
+  { id: 'room-6', room_number: '6', type: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
+  { id: 'room-7', room_number: '7', type: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
+  { id: 'room-8', room_number: '8', type: 'Suite', status: 'Ocupada', lockId: "Sin Definir" },
+  { id: 'room-9', room_number: '9', type: 'Deluxe', status: 'Limpieza', lockId: "Sin Definir" },
+  { id: 'room-10', room_number: '10', type: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
 ];
 
 export const bookings: Booking[] = [
