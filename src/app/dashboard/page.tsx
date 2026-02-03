@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useState, useEffect } from "react"
@@ -117,7 +118,7 @@ export default function Dashboard() {
       
       <BookingRack />
 
-      <Separator className="my-8" />
+      <Separator className="my-10" />
 
       <AdminLockPanel />
 
