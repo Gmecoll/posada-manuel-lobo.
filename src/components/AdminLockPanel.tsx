@@ -1,16 +1,14 @@
 import { useState } from 'react';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import { Lock, Unlock, RefreshCw, Battery, Signal, WifiOff } from 'lucide-react';
-// Asegúrate de que esta ruta sea correcta según tu carpeta (puede ser '../firebase' o '../../firebase')
-import { app } from '../../firebaseConfig';
+import { functions } from '@/firebaseConfig';
 
 const AdminLockPanel = () => {
   const [locks, setLocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
 
-  // Inicializamos las funciones vinculadas a tu instancia de Firebase y la región us-central1
-  const functions = getFunctions(app, "us-central1");
+  // 'functions' is now imported directly, no need for getFunctions(app, ...)
 
   // 1. Función para obtener la lista de cerraduras
   const fetchLocks = async () => {
