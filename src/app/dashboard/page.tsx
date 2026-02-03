@@ -1,4 +1,3 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
@@ -20,6 +19,8 @@ import {
 import type { Booking, Room } from "@/lib/data"
 import { db } from "@/firebaseConfig"
 import { BookingRack } from "@/components/booking-rack"
+import AdminLockPanel from "@/components/AdminLockPanel"
+import { Separator } from "@/components/ui/separator"
 
 export default function Dashboard() {
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -115,6 +116,10 @@ export default function Dashboard() {
       </div>
       
       <BookingRack />
+
+      <Separator className="my-8" />
+
+      <AdminLockPanel />
 
     </div>
   )
