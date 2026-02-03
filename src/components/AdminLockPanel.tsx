@@ -2,15 +2,13 @@
 
 import { useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { Lock, Unlock, RefreshCw, Battery, Signal, WifiOff } from 'lucide-react';
+import { Lock, Unlock, RefreshCw, Battery, Signal, WifiOff, Fingerprint } from 'lucide-react';
 import { functions } from '@/firebaseConfig';
 
 const AdminLockPanel = () => {
   const [locks, setLocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-
-  // 'functions' is now imported directly, no need for getFunctions(app, ...)
 
   // 1. Función para obtener la lista de cerraduras
   const fetchLocks = async () => {
@@ -20,6 +18,7 @@ const AdminLockPanel = () => {
       const result: any = await listarCerraduras();
       if (result.data.success) {
         setLocks(result.data.locks);
+        console.log("Cerraduras cargadas:", result.data.locks);
       } else {
         alert("Error de TTLock: " + result.data.error);
       }
@@ -74,7 +73,7 @@ const AdminLockPanel = () => {
         {locks.length === 0 && !loading && (
           <div className="text-center py-12 border border-dashed border-white/10 rounded-3xl bg-white/[0.02]">
             <p className="text-slate-500 text-sm italic">
-              No hay dispositivos detectados.<br/>Pulsa el botón de refrescar para sincronizar.
+              No hay dispositivos detectados.<br/>Pulsaaaa el botón de refrescar para sincronizar.
             </p>
           </div>
         )}
@@ -82,9 +81,17 @@ const AdminLockPanel = () => {
         {locks.map((lock) => (
           <div key={lock.id} className="flex items-center justify-between p-5 bg-slate-950/60 border border-white/5 rounded-2xl hover:border-cyan-500/30 transition-all group">
             <div className="space-y-2">
-              <h3 className="text-white font-semibold group-hover:text-cyan-400 transition-colors">
-                {lock.nombre}
-              </h3>
+              <div>
+                <h3 className="text-white font-semibold group-hover:text-cyan-400 transition-colors">
+                  {lock.nombre}
+                </h3>
+                {/* ID DE LA CERRADURA VISIBLE AQUÍ */}
+                <div className="flex items-center gap-1 mt-1">
+                  <Fingerprint className="w-3 h-3 text-slate-600" />
+                  <span className="text-[9px] font-mono text-slate-500 tracking-tighter">ID: {lock.id}</span>
+                </div>
+              </div>
+
               <div className="flex items-center gap-4 text-[10px] uppercase tracking-[0.15em] font-bold">
                 <span className="flex items-center gap-1.5 text-slate-400 bg-white/5 px-2 py-1 rounded-md">
                   <Battery className={`w-3 h-3 ${lock.bateria < 25 ? 'text-red-500 animate-pulse' : 'text-emerald-500'}`} />
