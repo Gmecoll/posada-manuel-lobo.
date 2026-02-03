@@ -4,12 +4,12 @@ import { getAuth } from "firebase/auth";
 import { getFunctions } from "firebase/functions";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDNkjLashsuvkA90kMeflQdzdb4bZWmIag",
+  apiKey: "AIzaSyDNkjLashsuvkA9OkMeflQdzdb4bZWmIa",
   authDomain: "studio-4343626376-fea63.firebaseapp.com",
   projectId: "studio-4343626376-fea63",
-  storageBucket: "studio-4343626376-fea63.firebasestorage.app",
-  messagingSenderId: "182684151300",
-  appId: "1:182684151300:web:39794fb110b14ccc170f51"
+  storageBucket: "studio-4343626376-fea63.appspot.com",
+  messagingSenderId: "797368553258",
+  appId: "1:797368553258:web:78564b78426f4f22c6014d"
 };
 
 // Initialize Firebase only if it hasn't been initialized yet
