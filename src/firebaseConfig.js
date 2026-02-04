@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { getFunctions } from "firebase/functions";
+import { getStorage } from "firebase/storage"; // <--- 1. NUEVO IMPORT
 
 const firebaseConfig = {
   apiKey: "AIzaSyDNkjLashsuvkA9OkMeflQdzdb4bZWmIag",
@@ -18,5 +19,6 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
 const auth = getAuth(app);
 const functions = getFunctions(app, "us-central1");
+const storage = getStorage(app); // <--- 2. INICIALIZACIÓN
 
-export { app, db, auth, functions };
+export { app, db, auth, functions, storage }; // <--- 3. EXPORTACIÓN AÑADIDA

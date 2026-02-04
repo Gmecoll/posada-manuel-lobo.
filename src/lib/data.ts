@@ -26,6 +26,10 @@ export type Booking = {
   checkOutDate: string;
   status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled' | 'Bloqueada';
   access_enabled: boolean;
+  documentStatus?: 'pending' | 'approved' | 'manual_review' | 'not_uploaded';
+  documentUrl?: string;
+  ocrText?: string;
+  verifiedAt?: any;
 };
 
 export type Service = {

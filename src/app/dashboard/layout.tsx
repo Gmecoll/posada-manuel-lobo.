@@ -11,6 +11,7 @@ import {
   History,
   ShoppingBasket,
   LogOut,
+  FileText,
 } from "lucide-react"
 import {
   SidebarProvider,
@@ -104,6 +105,14 @@ export default function DashboardLayout({
                 <Link href="/dashboard/services">
                   <ShoppingBasket />
                   Servicios
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton href="/dashboard/documents" asChild>
+                <Link href="/dashboard/documents">
+                  <FileText />
+                  Documentos
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

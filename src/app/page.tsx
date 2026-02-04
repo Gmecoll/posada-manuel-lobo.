@@ -150,7 +150,7 @@ export default function AdminLoginPage() {
             <TableBody>
               <TableRow>
                 <TableCell>Email de prueba</TableCell>
-                <TableCell>pilar@posada.com</TableCell>
+                <TableCell>usuario@pasada.com</TableCell>
               </TableRow>
               <TableRow>
                 <TableCell>Contraseña de prueba</TableCell>
