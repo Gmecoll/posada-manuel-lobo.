@@ -22,14 +22,22 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (!params.id) return
     const bookingRef = doc(db, "bookings", params.id)
-    const unsubscribe = onSnapshot(bookingRef, (doc) => {
-      if (doc.exists()) {
-        setBooking({ id: doc.id, ...doc.data() } as Booking)
-      } else {
+    const unsubscribe = onSnapshot(
+      bookingRef,
+      (doc) => {
+        if (doc.exists()) {
+          setBooking({ id: doc.id, ...doc.data() } as Booking)
+        } else {
+          setBooking(null)
+        }
+        setIsLoading(false)
+      },
+      (error) => {
+        console.error("Error fetching booking:", error)
+        setIsLoading(false)
         setBooking(null)
       }
-      setIsLoading(false)
-    })
+    )
     return () => unsubscribe()
   }, [params.id])
 
@@ -37,14 +45,21 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     if (!booking?.roomId) return
     const roomRef = doc(db, "rooms", booking.roomId)
-    const unsubscribe = onSnapshot(roomRef, (doc) => {
-      if (doc.exists()) {
-        const roomData = { id: doc.id, ...doc.data() } as Room
-        setRoom(roomData)
-      } else {
+    const unsubscribe = onSnapshot(
+      roomRef,
+      (doc) => {
+        if (doc.exists()) {
+          const roomData = { id: doc.id, ...doc.data() } as Room
+          setRoom(roomData)
+        } else {
+          setRoom(null)
+        }
+      },
+      (error) => {
+        console.error("Error fetching room:", error)
         setRoom(null)
       }
-    })
+    )
     return () => unsubscribe()
   }, [booking?.roomId])
 

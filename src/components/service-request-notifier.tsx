@@ -77,6 +77,8 @@ export function ServiceRequestNotifier() {
       );
       const unread = allSortedRequests.filter(req => req.leido === false);
       setNewRequests(unread);
+    }, (error) => {
+      console.error("Error fetching new service requests:", error);
     });
 
     return () => unsubscribe();
@@ -94,6 +96,8 @@ export function ServiceRequestNotifier() {
         (doc) => ({ id: doc.id, ...doc.data() }) as ServiceRequest
       );
       setAllRequests(all);
+    }, (error) => {
+        console.error("Error fetching all service requests:", error);
     });
 
     return () => unsubscribe();

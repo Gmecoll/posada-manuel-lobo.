@@ -45,28 +45,41 @@ export function BookingRack() {
   useEffect(() => {
     setIsLoading(true)
     const roomsCol = collection(db, "rooms")
-    const unsubscribeRooms = onSnapshot(roomsCol, (snapshot) => {
-      const roomsFromDb = snapshot.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        .sort(
-          (a, b) =>
-            parseInt(a.room_number ?? "0") - parseInt(b.room_number ?? "0")
-        ) as Room[]
-      setRooms(roomsFromDb)
-      if(snapshot.size > 0) setIsLoading(false)
-    })
+    const unsubscribeRooms = onSnapshot(
+      roomsCol,
+      (snapshot) => {
+        const roomsFromDb = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          .sort(
+            (a, b) =>
+              parseInt(a.room_number ?? "0") - parseInt(b.room_number ?? "0")
+          ) as Room[]
+        setRooms(roomsFromDb)
+        if (snapshot.size > 0) setIsLoading(false)
+      },
+      (error) => {
+        console.error("Error fetching rooms for rack:", error)
+        setIsLoading(false)
+      }
+    )
 
     const bookingsCol = collection(db, "bookings")
-    const unsubscribeBookings = onSnapshot(bookingsCol, (snapshot) => {
-      const bookingsFromDb = snapshot.docs.map((doc) => {
-        const data = doc.data()
-        return { id: doc.id, ...data } as Booking
-      })
-      setBookings(bookingsFromDb)
-    })
+    const unsubscribeBookings = onSnapshot(
+      bookingsCol,
+      (snapshot) => {
+        const bookingsFromDb = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          return { id: doc.id, ...data } as Booking
+        })
+        setBookings(bookingsFromDb)
+      },
+      (error) => {
+        console.error("Error fetching bookings for rack:", error)
+      }
+    )
 
     return () => {
       unsubscribeRooms()

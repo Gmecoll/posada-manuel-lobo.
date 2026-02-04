@@ -47,19 +47,26 @@ export default function RoomsPage() {
 
   useEffect(() => {
     const roomsCol = collection(db, "rooms")
-    const unsubscribe = onSnapshot(roomsCol, (snapshot) => {
-      const roomsFromDb = snapshot.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        // Ensure data is sorted by room number (as numbers)
-        .sort(
-          (a, b) =>
-            parseInt(a.room_number ?? "0") - parseInt(b.room_number ?? "0")
-        ) as Room[]
-      setRooms(roomsFromDb)
-    })
+    const unsubscribe = onSnapshot(
+      roomsCol,
+      (snapshot) => {
+        const roomsFromDb = snapshot.docs
+          .map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          }))
+          // Ensure data is sorted by room number (as numbers)
+          .sort(
+            (a, b) =>
+              parseInt(a.room_number ?? "0") - parseInt(b.room_number ?? "0")
+          ) as Room[]
+        setRooms(roomsFromDb)
+      },
+      (error) => {
+        console.error("Error fetching rooms:", error)
+        setRooms([])
+      }
+    )
 
     return () => unsubscribe()
   }, [])

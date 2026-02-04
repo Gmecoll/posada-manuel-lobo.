@@ -38,6 +38,9 @@ export const AdminDocumentPanel: React.FC = () => {
       })) as PendingBooking[];
       setBookings(docs);
       setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching pending documents:", error);
+      setIsLoading(false);
     });
 
     return () => unsubscribe();

@@ -46,13 +46,19 @@ export default function BookingsPage() {
 
   useEffect(() => {
     const roomsCol = collection(db, "rooms")
-    const unsubscribe = onSnapshot(roomsCol, (snapshot) => {
-      const roomsFromDb = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Room[]
-      setRooms(roomsFromDb)
-    })
+    const unsubscribe = onSnapshot(
+      roomsCol,
+      (snapshot) => {
+        const roomsFromDb = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        })) as Room[]
+        setRooms(roomsFromDb)
+      },
+      (error) => {
+        console.error("Error fetching rooms:", error)
+      }
+    )
     return () => unsubscribe()
   }, [])
 
@@ -60,41 +66,49 @@ export default function BookingsPage() {
     if (rooms.length === 0) return
 
     const bookingsCol = collection(db, "bookings")
-    const unsubscribe = onSnapshot(bookingsCol, (snapshot) => {
-      const bookingsFromDb = snapshot.docs.map((doc) => {
-        const docData = doc.data()
-        return {
-          id: doc.id,
-          guest_name: docData.guest_name,
-          booking_id: docData.booking_id,
-          roomId: docData.roomId,
-          room_number: docData.room_number,
-          checkInDate: docData.checkInDate,
-          checkOutDate: docData.checkOutDate,
-          status: docData.status,
-          access_enabled: docData.access_enabled,
-        } as Booking
-      })
-
-      const detailedBookings = bookingsFromDb
-        .map((booking) => {
-          const room = rooms.find((r) => r.id === booking.roomId)
-          if (!room) {
-            return null
-          }
+    const unsubscribe = onSnapshot(
+      bookingsCol,
+      (snapshot) => {
+        const bookingsFromDb = snapshot.docs.map((doc) => {
+          const docData = doc.data()
           return {
-            ...booking,
-            room,
-          }
+            id: doc.id,
+            guest_name: docData.guest_name,
+            booking_id: docData.booking_id,
+            roomId: docData.roomId,
+            room_number: docData.room_number,
+            checkInDate: docData.checkInDate,
+            checkOutDate: docData.checkOutDate,
+            status: docData.status,
+            access_enabled: docData.access_enabled,
+          } as Booking
         })
-        .filter((b): b is BookingWithDetails => b !== null)
-        .sort(
-          (a, b) =>
-            new Date(b.checkInDate).getTime() - new Date(a.checkInDate).getTime()
-        )
 
-      setData(detailedBookings)
-    })
+        const detailedBookings = bookingsFromDb
+          .map((booking) => {
+            const room = rooms.find((r) => r.id === booking.roomId)
+            if (!room) {
+              return null
+            }
+            return {
+              ...booking,
+              room,
+            }
+          })
+          .filter((b): b is BookingWithDetails => b !== null)
+          .sort(
+            (a, b) =>
+              new Date(b.checkInDate).getTime() -
+              new Date(a.checkInDate).getTime()
+          )
+
+        setData(detailedBookings)
+      },
+      (error) => {
+        console.error("Error fetching bookings:", error)
+        setData([])
+      }
+    )
 
     return () => unsubscribe()
   }, [rooms])
