@@ -1,3 +1,4 @@
+
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
@@ -55,9 +56,8 @@ exports.mantenimientoHabitaciones = onSchedule({
 }, async (event) => {
   try {
     const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0); // Normalizar a medianoche para comparación de fechas
+    hoy.setHours(0, 0, 0, 0); 
 
-    // 1. Obtener todas las habitaciones y las reservas activas (check-in, confirmadas y bloqueadas)
     const [roomsSnap, bookingsSnap] = await Promise.all([
       db.collection("rooms").get(),
       db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada", "Confirmed"]).get(),
@@ -68,17 +68,12 @@ exports.mantenimientoHabitaciones = onSchedule({
       return null;
     }
 
-    // 2. Crear un mapa de habitaciones que deberían estar ocupadas hoy
     const occupiedRooms = new Set();
     bookingsSnap.forEach((doc) => {
       const booking = doc.data();
-      // Las fechas se guardan como 'YYYY-MM-DD'.
-      // Añadir 'T00:00:00' ayuda a evitar problemas de zona horaria en la conversión
       const fechaIn = new Date(booking.checkInDate + "T00:00:00");
       const fechaOut = new Date(booking.checkOutDate + "T00:00:00");
 
-      // La habitación está ocupada desde el día de check-in HASTA el día ANTERIOR al check-out.
-      // El día del check-out ya se considera disponible.
       if (hoy >= fechaIn && hoy < fechaOut) {
         occupiedRooms.add(booking.roomId);
       }
@@ -87,25 +82,19 @@ exports.mantenimientoHabitaciones = onSchedule({
     const batch = db.batch();
     let hayCambios = false;
 
-    // 3. Iterar sobre cada habitación para actualizar estado y código
     roomsSnap.forEach((roomDoc) => {
       const roomRef = roomDoc.ref;
       const roomData = roomDoc.data();
       const roomId = roomDoc.id;
 
       const updatePayload = {};
-
-      // --- Lógica de actualización de estado ---
       const isOccupied = occupiedRooms.has(roomId);
       const newStatus = isOccupied ? "Ocupada" : "Disponible";
 
-      // Solo actualizamos si el estado calculado es diferente al actual,
-      // y respetamos el estado 'Limpieza' que es manual.
       if (roomData.status !== newStatus && roomData.status !== "Limpieza") {
         updatePayload.status = newStatus;
       }
 
-      // --- Lógica de rotación de código de emergencia ---
       const pool = roomData.codes_pool;
       if (Array.isArray(pool) && pool.length > 0) {
         const randomIndex = Math.floor(Math.random() * pool.length);
@@ -117,14 +106,12 @@ exports.mantenimientoHabitaciones = onSchedule({
         }
       }
 
-      // Si hay algo que actualizar, lo añadimos al batch
       if (Object.keys(updatePayload).length > 0) {
         batch.update(roomRef, updatePayload);
         hayCambios = true;
       }
     });
 
-    // 4. Ejecutar el batch si hubo cambios
     if (hayCambios) {
       await batch.commit();
       console.log("Mantenimiento: Batch de actualizaciones completado.");
@@ -132,10 +119,7 @@ exports.mantenimientoHabitaciones = onSchedule({
 
     return null;
   } catch (error) {
-    console.error(
-      "Error crítico en la función de mantenimiento de habitaciones:",
-      error
-    );
+    console.error("Error crítico en mantenimiento:", error);
     return null;
   }
 });
@@ -175,7 +159,6 @@ exports.obtenerTokenTTLock = onCall({
     if (!username || !passwordRaw) throw new HttpsError('invalid-argument', 'Faltan credenciales.');
     
     if (!process.env.TTLOCK_CLIENT_ID || !process.env.TTLOCK_CLIENT_SECRET) {
-        console.error("CRITICAL: TTLock secrets (ID or Secret) are missing.");
         throw new HttpsError('failed-precondition', 'Servicio de cerraduras no configurado.');
     }
     
@@ -192,8 +175,10 @@ exports.obtenerTokenTTLock = onCall({
         const response = await axios.post('https://api.ttlock.com/oauth2/token', params);
         
         if (response.data.access_token) {
+            // AHORA GUARDAMOS EL REFRESH_TOKEN PARA EVITAR QUE CADUQUE
             await db.collection('configuracion_sistema').doc('ttlock_auth').set({
                 accessToken: response.data.access_token,
+                refreshToken: response.data.refresh_token, // <--- CAMBIO CLAVE
                 uid: response.data.uid,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
@@ -211,15 +196,14 @@ exports.obtenerTokenTTLock = onCall({
 exports.abrirCerraduraRemote = onCall({ 
     region: "us-central1", 
     cors: true, 
-    secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_ACCESS_TOKEN"]
+    secrets: ["TTLOCK_CLIENT_ID"]
 }, async (request) => {
     
     const { booking_id, lockId: adminLockId } = request.data;
     const email = request.auth ? request.auth.token.email : "";
 
-    if (!process.env.TTLOCK_CLIENT_ID || !process.env.TTLOCK_ACCESS_TOKEN) {
-        console.error("CRITICAL: TTLock secrets (ID or Token) are missing.");
-        throw new HttpsError('failed-precondition', 'El servicio de cerraduras no está configurado.');
+    if (!process.env.TTLOCK_CLIENT_ID) {
+        throw new HttpsError('failed-precondition', 'Configuración incompleta.');
     }
 
     // 1. ATAJO PARA ADMIN
@@ -238,12 +222,11 @@ exports.abrirCerraduraRemote = onCall({
         .get();
 
     if (querySnapshot.empty) {
-        throw new HttpsError('permission-denied', 'Reserva no encontrada en el sistema.');
+        throw new HttpsError('permission-denied', 'Reserva no encontrada.');
     }
     
     const bData = querySnapshot.docs[0].data();
 
-    // VALIDACIÓN DE FECHAS
     const ahora = new Date();
     const fechaIn = new Date(bData.checkInDate || bData.checkIn);
     const fechaOut = new Date(bData.checkOutDate || bData.checkOut);
@@ -266,7 +249,7 @@ exports.abrirCerraduraRemote = onCall({
     const roomRef = db.collection('rooms').doc(`room-${cleanRoomId}`);
     const roomSnap = await roomRef.get();
     
-    if (!roomSnap.exists) throw new HttpsError('internal', 'Configuración de habitación no encontrada.');
+    if (!roomSnap.exists) throw new HttpsError('internal', 'Habitación no encontrada.');
 
     const rData = roomSnap.data();
     const lockIdReal = rData.lockId || rData.lock_id;
@@ -282,10 +265,16 @@ exports.abrirCerraduraRemote = onCall({
 // --- HELPER: LLAMADA A API TTLOCK ---
 async function llamarTTLock(lockId, userIdentifier, logDescription) {
     try {
+        const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
+        if (!authDoc.exists || !authDoc.data().accessToken) {
+            throw new HttpsError('failed-precondition', 'La cuenta de TTLock no ha sido vinculada o el token no está disponible.');
+        }
+        const tokenDinamico = authDoc.data().accessToken;
+
         const response = await axios.post('https://api.ttlock.com/v3/lock/unlock', null, {
             params: {
                 clientId: process.env.TTLOCK_CLIENT_ID,
-                accessToken: process.env.TTLOCK_ACCESS_TOKEN,
+                accessToken: tokenDinamico,
                 lockId: lockId,
                 date: Date.now()
             }
@@ -316,18 +305,17 @@ async function llamarTTLock(lockId, userIdentifier, logDescription) {
 exports.listarCerradurasTTLock = onCall({ 
     region: "us-central1", 
     cors: true, 
-    secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_ACCESS_TOKEN"]
+    secrets: ["TTLOCK_CLIENT_ID"]
 }, async (request) => {
 
-    if (!process.env.TTLOCK_CLIENT_ID || !process.env.TTLOCK_ACCESS_TOKEN) {
-        console.error("CRITICAL: TTLock secrets (ID or Token) are missing.");
-        throw new HttpsError('failed-precondition', 'Servicio de cerraduras no configurado.');
+    if (!process.env.TTLOCK_CLIENT_ID) {
+        throw new HttpsError('failed-precondition', 'Servicio no configurado.');
     }
     
     try {
         const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
         if (!authDoc.exists || !authDoc.data().accessToken) {
-            throw new HttpsError('failed-precondition', 'La cuenta de TTLock no ha sido vinculada. Vaya a Ajustes para configurarla.');
+            throw new HttpsError('failed-precondition', 'La cuenta de TTLock no ha sido vinculada.');
         }
         const accessToken = authDoc.data().accessToken;
 
@@ -341,19 +329,14 @@ exports.listarCerradurasTTLock = onCall({
             }
         });
         
-        console.log("Respuesta de TTLock API:", response.data);
-
         if (response.data.errcode !== 0) {
-             throw new HttpsError('unknown', response.data.errmsg || 'Error desconocido de TTLock');
+             throw new HttpsError('unknown', response.data.errmsg || 'Error de TTLock');
         }
 
         return { success: true, list: response.data.list || [] };
     } catch (error) {
         console.error("Error al listar cerraduras:", error);
-        if (error instanceof HttpsError) {
-            throw error;
-        }
-        throw new HttpsError('internal', error.message || 'Error de comunicación con el servicio de cerraduras.');
+        throw new HttpsError('internal', error.message);
     }
 });
 
@@ -377,7 +360,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
     const bookingId = pathParts[1]; 
     const bookingRef = db.collection('bookings').doc(bookingId);
 
-    console.log(`Iniciando validación tripartita para Reserva: ${bookingId}`);
+    console.log(`Iniciando validación para Reserva: ${bookingId}`);
 
     try {
         const vision = require('@google-cloud/vision');
@@ -386,16 +369,12 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         const [result] = await visionClient.textDetection(`gs://${bucket}/${filePath}`);
         const detections = result.textAnnotations;
         const fullText = detections.length > 0 ? detections[0].description.toLowerCase() : '';
-        const textLength = fullText.length;
 
-        const keywords = ['dni', 'pasaporte', 'passport', 'identidad', 'república oriental del uruguay', 'documento', 'nombre', 'apellido', 'nacimiento'];
+        const keywords = ['dni', 'pasaporte', 'passport', 'identidad', 'república', 'documento', 'nombre', 'apellido', 'nacimiento'];
         const matches = keywords.filter(word => fullText.includes(word));
         
-        console.log(`Análisis: ${matches.length} matches, ${textLength} caracteres detectados.`);
-
         let updateData = {};
 
-        // --- POSIBILIDAD 1: APROBADO (Alta confianza) ---
         if (matches.length >= 2) {
             updateData = {
                 document_status: 'approved',
@@ -403,22 +382,14 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 ocr_text: fullText.substring(0, 800),
                 document_validated_at: admin.firestore.FieldValue.serverTimestamp()
             };
-            console.log("Resultado: APROBADO AUTOMÁTICAMENTE");
-
-      
-
-        // --- POSIBILIDAD 3: RECHAZADO (Baja confianza / Foto no válida) ---
         } else {
             updateData = {
                 document_status: 'not_uploaded',
                 document_url: admin.firestore.FieldValue.delete(), 
-                access_enabled: false,
                 ocr_text: "RECHAZO_AUTO: No parece un documento (" + matches.length + " matches)"
             };
-            console.log("Resultado: RECHAZADO TOTALMENTE");
         }
 
-        // Delay de seguridad para ganar la carrera de escritura al Frontend
         await new Promise(resolve => setTimeout(resolve, 800));
 
         await bookingRef.update({
@@ -429,11 +400,10 @@ exports.validarDocumentoHuesped = onObjectFinalized({
     } catch (error) {
         console.error("Error en proceso OCR:", error);
         await bookingRef.update({
-            document_status: 'manual_review',
+            document_status: 'error',
             ocr_text: "ERROR_TECNICO: " + error.message,
             updated_at: admin.firestore.FieldValue.serverTimestamp()
         });
     }
     return null;
-
 });

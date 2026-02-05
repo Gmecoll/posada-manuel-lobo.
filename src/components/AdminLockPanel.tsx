@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -11,7 +12,6 @@ const AdminLockPanel = () => {
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
   
-  // 1. Estado para el feedback visual
   const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   useEffect(() => {
@@ -21,7 +21,7 @@ const AdminLockPanel = () => {
 
   const fetchLocks = async () => {
     setLoading(true);
-    setFeedback(null); // Limpiar feedback al refrescar
+    setFeedback(null);
     try {
       const listarCerraduras = httpsCallable(functions, 'listarCerradurasTTLock');
       const result: any = await listarCerraduras();
@@ -36,10 +36,12 @@ const AdminLockPanel = () => {
         }));
         setLocks(listaMapeada);
       } else {
-        setFeedback({ msg: "No se pudo sincronizar la lista de cerraduras", type: 'error' });
+        const errorMessage = result.data?.error || "No se pudo sincronizar la lista de cerraduras";
+        setFeedback({ msg: `Error: ${errorMessage}`, type: 'error' });
       }
     } catch (error: any) {
-      setFeedback({ msg: "Error de conexión con el servidor", type: 'error' });
+      const detailedMessage = error.message || "Error de conexión con el servidor";
+      setFeedback({ msg: `Error: ${detailedMessage}`, type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -47,7 +49,7 @@ const AdminLockPanel = () => {
 
   const handleUnlock = async (lockId: number) => {
     setActionLoading(lockId);
-    setFeedback(null); // Limpiar mensajes previos antes de la acción
+    setFeedback(null);
     
     try {
       const abrir = httpsCallable(functions, 'abrirCerraduraRemote');
@@ -55,14 +57,14 @@ const AdminLockPanel = () => {
       
       if (res.data && res.data.success) {
         setFeedback({ msg: "✅ Puerta abierta con éxito", type: 'success' });
-        // Opcional: Auto-limpiar el éxito después de 5 segundos
         setTimeout(() => setFeedback(null), 5000);
       } else {
-        const errorMsg = res.data?.error || "Error desconocido";
-        setFeedback({ msg: `❌ Error: ${errorMsg}`, type: 'error' });
+        const errorMsg = res.data?.error || "Error desconocido al abrir";
+        setFeedback({ msg: `Error: ${errorMsg}`, type: 'error' });
       }
     } catch (e: any) {
-      setFeedback({ msg: "🔥 Error crítico de red o permisos", type: 'error' });
+      const detailedMessage = e.message || "Error crítico de red o permisos";
+      setFeedback({ msg: `Error: ${detailedMessage}`, type: 'error' });
     } finally {
       setActionLoading(null);
     }
@@ -92,7 +94,6 @@ const AdminLockPanel = () => {
         </div>
       </div>
 
-      {/* 2. Visualización del Feedback */}
       {feedback && (
         <div className={`mb-6 p-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 border ${
           feedback.type === 'success' 
