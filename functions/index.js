@@ -117,6 +117,13 @@ exports.obtenerTokenTTLock = onCall({
     secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_CLIENT_SECRET"] 
 }, async (request) => {
     const { username, passwordRaw } = request.data || {};
+    if (!username || !passwordRaw) throw new HttpsError('invalid-argument', 'Faltan credenciales.');
+    
+    if (!process.env.TTLOCK_CLIENT_ID || !process.env.TTLOCK_CLIENT_SECRET) {
+        console.error("CRITICAL: TTLock secrets (ID or Secret) are missing.");
+        throw new HttpsError('failed-precondition', 'Servicio de cerraduras no configurado.');
+    }
+    
     const md5Password = crypto.createHash('md5').update(passwordRaw).digest('hex');
 
     try {
@@ -144,7 +151,7 @@ exports.obtenerTokenTTLock = onCall({
 });
 
 // ==========================================
-// --- FUNCIÓN 5: APERTURA INTELIGENTE (CORREGIDA) ---
+// --- FUNCIÓN 5: APERTURA INTELIGENTE ---
 // ==========================================
 exports.abrirCerraduraRemote = onCall({ 
     region: "us-central1", 
@@ -155,16 +162,21 @@ exports.abrirCerraduraRemote = onCall({
     const { booking_id, lockId: adminLockId } = request.data;
     const email = request.auth ? request.auth.token.email : "";
 
+    if (!process.env.TTLOCK_CLIENT_ID || !process.env.TTLOCK_ACCESS_TOKEN) {
+        console.error("CRITICAL: TTLock secrets (ID or Token) are missing.");
+        throw new HttpsError('failed-precondition', 'El servicio de cerraduras no está configurado.');
+    }
+
     // 1. ATAJO PARA ADMIN
     if (email === ADMIN_EMAIL && adminLockId) {
-        return await llamarTTLock(adminLockId);
+        const userIdentifier = `Admin (${email})`;
+        const logDescription = `${userIdentifier} abrió la cerradura ${adminLockId} remotamente.`;
+        return await llamarTTLock(adminLockId, userIdentifier, logDescription);
     }
 
     // 2. VALIDACIÓN DE CREDENCIALES
     if (!booking_id) throw new HttpsError('invalid-argument', 'Falta el código de reserva.');
 
-    // --- NUEVA LÓGICA DE BÚSQUEDA ---
-    // Intentamos buscar por campo interno 'booking_id' ya que el ID del doc es aleatorio
     const querySnapshot = await db.collection('bookings')
         .where('booking_id', '==', String(booking_id))
         .limit(1)
@@ -195,7 +207,6 @@ exports.abrirCerraduraRemote = onCall({
     const roomId = bData.roomId || bData.room_id || bData.room_number || bData.roomNumber; 
     if (!roomId) throw new HttpsError('internal', 'Reserva sin habitación vinculada.');
 
-    // Buscamos la habitación (Normalizando el ID para buscar room-X)
     const cleanRoomId = String(roomId).replace(/^(room-)/, '');
     const roomRef = db.collection('rooms').doc(`room-${cleanRoomId}`);
     const roomSnap = await roomRef.get();
@@ -207,11 +218,14 @@ exports.abrirCerraduraRemote = onCall({
     
     if (!lockIdReal) throw new HttpsError('internal', 'Cerradura no configurada.');
 
-    return await llamarTTLock(lockIdReal);
+    const userIdentifier = bData.guest_name || `Booking ${booking_id}`;
+    const logDescription = `${userIdentifier} (Hab. ${bData.room_number}) abrió la cerradura ${lockIdReal}.`;
+
+    return await llamarTTLock(lockIdReal, userIdentifier, logDescription);
 });
 
 // --- HELPER: LLAMADA A API TTLOCK ---
-async function llamarTTLock(lockId) {
+async function llamarTTLock(lockId, userIdentifier, logDescription) {
     try {
         const response = await axios.post('https://api.ttlock.com/v3/lock/unlock', null, {
             params: {
@@ -225,6 +239,16 @@ async function llamarTTLock(lockId) {
         if (response.data.errcode !== 0) {
             return { success: false, error: response.data.errmsg, code: response.data.errcode };
         }
+        
+        if(userIdentifier && logDescription) {
+            await db.collection('activity_logs').add({
+                description: logDescription,
+                user: userIdentifier,
+                timestamp: admin.firestore.FieldValue.serverTimestamp(),
+                type: 'access'
+            });
+        }
+        
         return { success: true };
     } catch (error) {
         throw new HttpsError('internal', 'Error de comunicación con la cerradura.');
@@ -239,32 +263,66 @@ exports.listarCerradurasTTLock = onCall({
     cors: true, 
     secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_ACCESS_TOKEN"]
 }, async (request) => {
+
+    if (!process.env.TTLOCK_CLIENT_ID || !process.env.TTLOCK_ACCESS_TOKEN) {
+        console.error("CRITICAL: TTLock secrets (ID or Token) are missing.");
+        throw new HttpsError('failed-precondition', 'Servicio de cerraduras no configurado.');
+    }
+    
     try {
+        const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
+        if (!authDoc.exists || !authDoc.data().accessToken) {
+            throw new HttpsError('failed-precondition', 'La cuenta de TTLock no ha sido vinculada. Vaya a Ajustes para configurarla.');
+        }
+        const accessToken = authDoc.data().accessToken;
+
         const response = await axios.get('https://api.ttlock.com/v3/lock/list', {
             params: {
                 clientId: process.env.TTLOCK_CLIENT_ID, 
-                accessToken: process.env.TTLOCK_ACCESS_TOKEN,
-                pageNo: 1, pageSize: 40, date: Date.now()
+                accessToken: accessToken,
+                pageNo: 1, 
+                pageSize: 40, 
+                date: Date.now()
             }
         });
+        
+        console.log("Respuesta de TTLock API:", response.data);
+
+        if (response.data.errcode !== 0) {
+             throw new HttpsError('unknown', response.data.errmsg || 'Error desconocido de TTLock');
+        }
+
         return { success: true, list: response.data.list || [] };
     } catch (error) {
-        return { success: false, error: error.message };
+        console.error("Error al listar cerraduras:", error);
+        if (error instanceof HttpsError) {
+            throw error;
+        }
+        throw new HttpsError('internal', error.message || 'Error de comunicación con el servicio de cerraduras.');
     }
 });
+
 
 // ==========================================
 // --- FUNCIÓN 7: VALIDACIÓN AUTOMÁTICA OCR ---
 // ==========================================
 exports.validarDocumentoHuesped = onObjectFinalized({
-    region: "us-central1"
+    region: "us-central1",
+    timeoutSeconds: 60,
+    memory: "512MiB"
 }, async (event) => {
     const filePath = event.data.name; 
     const bucket = event.data.bucket;
-    if (!filePath.startsWith('checkins/')) return null;
+    
+    if (!filePath.toLowerCase().endsWith('doc_frontal.jpg')) return null;
 
-    const fileName = filePath.split('/').pop();
-    const bookingId = fileName.split('.')[0];
+    const pathParts = filePath.split('/');
+    if (pathParts.length < 2) return null;
+    
+    const bookingId = pathParts[1]; 
+    const bookingRef = db.collection('bookings').doc(bookingId);
+
+    console.log(`Iniciando validación tripartita para Reserva: ${bookingId}`);
 
     try {
         const vision = require('@google-cloud/vision');
@@ -273,21 +331,62 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         const [result] = await visionClient.textDetection(`gs://${bucket}/${filePath}`);
         const detections = result.textAnnotations;
         const fullText = detections.length > 0 ? detections[0].description.toLowerCase() : '';
+        const textLength = fullText.length;
 
-        const keywords = ['dni', 'pasaporte', 'passport', 'identidad', 'nacimiento', 'republica', 'sexo', 'documento'];
-        const hasKeywords = keywords.some(word => fullText.includes(word));
+        const keywords = ['dni', 'pasaporte', 'passport', 'identidad', 'república oriental del uruguay', 'documento', 'nombre', 'apellido', 'nacimiento'];
+        const matches = keywords.filter(word => fullText.includes(word));
+        
+        console.log(`Análisis: ${matches.length} matches, ${textLength} caracteres detectados.`);
 
-        const newStatus = hasKeywords ? 'approved' : 'manual_review';
+        let updateData = {};
 
-        await db.collection('bookings').doc(bookingId).update({
-            documentStatus: newStatus,
-            ocrText: fullText.substring(0, 500),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        // --- POSIBILIDAD 1: APROBADO (Alta confianza) ---
+        if (matches.length >= 2) {
+            updateData = {
+                document_status: 'approved',
+                access_enabled: true,
+                ocr_text: fullText.substring(0, 800),
+                document_validated_at: admin.firestore.FieldValue.serverTimestamp()
+            };
+            console.log("Resultado: APROBADO AUTOMÁTICAMENTE");
+
+        // --- POSIBILIDAD 2: REVISIÓN MANUAL (Duda razonable) ---
+        // Si hay al menos un match O hay mucho texto que podría ser un documento no reconocido
+        } else if (matches.length === 1 || textLength > 100) {
+            updateData = {
+                document_status: 'manual_review',
+                access_enabled: false, // Se mantiene bloqueado hasta que el admin lo vea
+                ocr_text: fullText.substring(0, 800)
+            };
+            console.log("Resultado: ENVIADO A REVISIÓN MANUAL");
+
+        // --- POSIBILIDAD 3: RECHAZADO (Baja confianza / Foto no válida) ---
+        } else {
+            updateData = {
+                document_status: 'not_uploaded',
+                document_url: admin.firestore.FieldValue.delete(), 
+                access_enabled: false,
+                ocr_text: "RECHAZO_AUTO: No parece un documento (" + matches.length + " matches)"
+            };
+            console.log("Resultado: RECHAZADO TOTALMENTE");
+        }
+
+        // Delay de seguridad para ganar la carrera de escritura al Frontend
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        await bookingRef.update({
+            ...updateData,
+            updated_at: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        return null;
     } catch (error) {
-        console.error("Error OCR:", error);
-        return null;
+        console.error("Error en proceso OCR:", error);
+        await bookingRef.update({
+            document_status: 'manual_review',
+            ocr_text: "ERROR_TECNICO: " + error.message,
+            updated_at: admin.firestore.FieldValue.serverTimestamp()
+        });
     }
+    return null;
+
 });

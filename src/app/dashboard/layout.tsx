@@ -1,3 +1,4 @@
+
 "use client"
 
 import Link from "next/link"
@@ -12,6 +13,7 @@ import {
   ShoppingBasket,
   LogOut,
   FileText,
+  DoorOpen,
 } from "lucide-react"
 import {
   SidebarProvider,
@@ -97,6 +99,14 @@ export default function DashboardLayout({
                 <Link href="/dashboard/rooms">
                   <BedDouble />
                   Gestión de Habitaciones
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton href="/dashboard/main-door" asChild>
+                <Link href="/dashboard/main-door">
+                  <DoorOpen />
+                  Puerta Principal
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
