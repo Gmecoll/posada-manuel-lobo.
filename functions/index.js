@@ -126,12 +126,13 @@ exports.mantenimientoHabitaciones = onSchedule({
 
 
 // ==========================================
-// --- FUNCIÓN 3: IA CONSERJE ---
+// --- FUNCIÓN 3: IA CONSERJE (PÚBLICA Y FLEXIBLE) ---
 // ==========================================
 exports.conserjeCall = onCall({ 
     secrets: ["GOOGLE_GENAI_API_KEY"], 
     region: "us-central1",
-    cors: true
+    cors: true,
+    invoker: 'public' // <--- Esto ayuda a que sea pública desde el despliegue
 }, async (request) => {
     let aiModule;
     try { 
@@ -139,14 +140,16 @@ exports.conserjeCall = onCall({
     } catch (e) { 
         throw new HttpsError('unavailable', 'IA no cargada');
     }
+
     try {
+        // Pasamos todo el objeto 'request.data' al flujo
         const result = await aiModule.conserjeflow(request.data);
         return { response: result };
     } catch (error) {
+        console.error("Error en conserjeCall:", error);
         throw new HttpsError('internal', error.message);
     }
 });
-
 // ==========================================
 // --- FUNCIÓN 4: OBTENER TOKEN TTLOCK ---
 // ==========================================
@@ -300,47 +303,87 @@ async function llamarTTLock(lockId, userIdentifier, logDescription) {
 }
 
 // ==========================================
-// --- FUNCIÓN 6: LISTAR CERRADURAS ---
+// --- FUNCIÓN 6: LISTAR CERRADURAS (ESTRUCTURA ORIGINAL EXITOSA) ---
 // ==========================================
 exports.listarCerradurasTTLock = onCall({ 
     region: "us-central1", 
     cors: true, 
-    secrets: ["TTLOCK_CLIENT_ID"]
+    secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_CLIENT_SECRET"]
 }, async (request) => {
+    const clientId = process.env.TTLOCK_CLIENT_ID;
+    const clientSecret = process.env.TTLOCK_CLIENT_SECRET;
 
-    if (!process.env.TTLOCK_CLIENT_ID) {
-        throw new HttpsError('failed-precondition', 'Servicio no configurado.');
-    }
-    
     try {
-        const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
-        if (!authDoc.exists || !authDoc.data().accessToken) {
-            throw new HttpsError('failed-precondition', 'La cuenta de TTLock no ha sido vinculada.');
+        const authRef = db.collection('configuracion_sistema').doc('ttlock_auth');
+        const authDoc = await authRef.get();
+        
+        if (!authDoc.exists) {
+            throw new HttpsError('failed-precondition', 'La cuenta no está vinculada.');
         }
-        const accessToken = authDoc.data().accessToken;
 
-        const response = await axios.get('https://api.ttlock.com/v3/lock/list', {
+        let { accessToken, refreshToken } = authDoc.data();
+
+        // 1. Intento de listar (Formato que funcionaba)
+        let response = await axios.get('https://api.ttlock.com/v3/lock/list', {
             params: {
-                clientId: process.env.TTLOCK_CLIENT_ID, 
+                clientId: clientId,
                 accessToken: accessToken,
-                pageNo: 1, 
-                pageSize: 40, 
+                pageNo: 1,
+                pageSize: 100,
                 date: Date.now()
             }
         });
-        
+
+        // 2. Si el error es de token (10003), renovamos
+        if (response.data && response.data.errcode === 10003) {
+            console.log("Token expirado (10003). Iniciando renovación...");
+
+            const data = new URLSearchParams();
+            data.append('client_id', clientId);
+            data.append('client_secret', clientSecret);
+            data.append('refresh_token', refreshToken);
+            data.append('grant_type', 'refresh_token');
+
+            const refreshRes = await axios.post('https://api.ttlock.com/oauth2/token', data);
+
+            if (refreshRes.data && refreshRes.data.access_token) {
+                accessToken = refreshRes.data.access_token;
+                refreshToken = refreshRes.data.refresh_token || refreshToken;
+
+                // Guardar en Firestore
+                await authRef.update({
+                    accessToken: accessToken,
+                    refreshToken: refreshToken,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+
+                // Reintentar la llamada original
+                response = await axios.get('https://api.ttlock.com/v3/lock/list', {
+                    params: {
+                        clientId: clientId,
+                        accessToken: accessToken,
+                        pageNo: 1,
+                        pageSize: 100,
+                        date: Date.now()
+                    }
+                });
+            }
+        }
+
+        // 3. Validar respuesta final
         if (response.data.errcode !== 0) {
-             throw new HttpsError('unknown', response.data.errmsg || 'Error de TTLock');
+            console.error("Error final de TTLock API:", response.data);
+            throw new HttpsError('internal', `Error de TTLock: ${response.data.errmsg}`);
         }
 
         return { success: true, list: response.data.list || [] };
+
     } catch (error) {
-        console.error("Error al listar cerraduras:", error);
+        console.error("Error crítico en listarCerraduras:", error.message);
+        if (error instanceof HttpsError) throw error;
         throw new HttpsError('internal', error.message);
     }
 });
-
-
 // ==========================================
 // --- FUNCIÓN 7: VALIDACIÓN AUTOMÁTICA OCR ---
 // ==========================================

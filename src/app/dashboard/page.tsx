@@ -21,7 +21,6 @@ import { db } from "@/firebaseConfig"
 import { BookingRack } from "@/components/booking-rack"
 import AdminLockPanel from "@/components/AdminLockPanel"
 import { Separator } from "@/components/ui/separator"
-import { DebugPanel } from "@/components/DebugPanel"
 
 export default function Dashboard() {
   const [bookings, setBookings] = useState<Booking[]>([])
@@ -120,11 +119,8 @@ export default function Dashboard() {
 
       <Separator className="my-10" />
 
-      <AdminLockPanel />
+      {/* <AdminLockPanel /> */}
 
-      <Separator className="my-10" />
-
-      <DebugPanel />
     </div>
   )
 }
