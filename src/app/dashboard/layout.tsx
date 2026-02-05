@@ -38,7 +38,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Image from "next/image"
-import { Logo } from "@/components/logo"
 import { useToast } from "@/hooks/use-toast"
 import { ServiceRequestNotifier } from "@/components/service-request-notifier"
 
@@ -72,7 +71,6 @@ export default function DashboardLayout({
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader>
-          <Logo />
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
