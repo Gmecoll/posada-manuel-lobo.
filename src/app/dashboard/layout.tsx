@@ -38,7 +38,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Image from "next/image"
-import { PlaceHolderImages } from "@/lib/placeholder-images"
 import { Logo } from "@/components/logo"
 import { useToast } from "@/hooks/use-toast"
 import { ServiceRequestNotifier } from "@/components/service-request-notifier"
@@ -48,7 +47,6 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode
 }) {
-  const userAvatar = PlaceHolderImages.find((img) => img.id === "user-avatar")
   const router = useRouter()
   const { toast } = useToast()
 
@@ -150,15 +148,13 @@ export default function DashboardLayout({
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" size="icon" className="rounded-full">
                 <Avatar>
-                  {userAvatar && (
-                    <Image
-                      src={userAvatar.imageUrl}
-                      alt={userAvatar.description}
-                      width={40}
-                      height={40}
-                      data-ai-hint={userAvatar.imageHint}
-                    />
-                  )}
+                  <Image
+                    src="https://lirp.cdn-website.com/0ec5f781/dms3rep/multi/opt/posadamanuellobo-removebg-preview-165w.png"
+                    alt="Posada Manuel Lobo Logo"
+                    width={40}
+                    height={40}
+                    className="object-contain"
+                  />
                   <AvatarFallback>ML</AvatarFallback>
                 </Avatar>
                 <span className="sr-only">Toggle user menu</span>
