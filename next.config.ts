@@ -21,6 +21,11 @@ const nextConfig: NextConfig = {
         hostname: 'images.unsplash.com',
         port: '',
         pathname: '/**',
+      },{
+      protocol: 'https',
+        hostname: 'adventureuruguay.com',
+        port: '',
+        pathname: '/wp-content/uploads/**', // Esto cubre todas tus fotos de WordPress
       },
       {
         protocol: 'https',
