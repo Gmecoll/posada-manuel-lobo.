@@ -46,45 +46,98 @@ exports.iniciarPagoServicio = onCall({
 });
 
 // ==========================================
-// --- FUNCIÓN 2: MANTENIMIENTO (ROTACIÓN) ---
+// --- FUNCIÓN 2: MANTENIMIENTO (ROTACIÓN Y ESTADO) ---
 // ==========================================
-exports.mantenimientoHabitaciones = onSchedule({ 
-    schedule: "every 1 minutes", 
-    region: "us-central1",
-    memory: "256MiB" 
+exports.mantenimientoHabitaciones = onSchedule({
+  schedule: "every 1 minutes",
+  region: "us-central1",
+  memory: "256MiB",
 }, async (event) => {
-    try {
-        const roomsSnap = await db.collection('rooms').get();
-        if (roomsSnap.empty) return null;
+  try {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0); // Normalizar a medianoche para comparación de fechas
 
-        const batch = db.batch();
-        let hayCambios = false;
+    // 1. Obtener todas las habitaciones y las reservas activas/bloqueadas
+    const [roomsSnap, bookingsSnap] = await Promise.all([
+      db.collection("rooms").get(),
+      db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada"]).get(),
+    ]);
 
-        roomsSnap.forEach((doc) => {
-            const data = doc.data();
-            const pool = data.codes_pool;
-
-            if (Array.isArray(pool) && pool.length > 0) {
-                const randomIndex = Math.floor(Math.random() * pool.length);
-                const nuevoCodigo = String(pool[randomIndex]);
-
-                if (data.backup_code !== nuevoCodigo) {
-                    batch.update(doc.ref, { 
-                        backup_code: nuevoCodigo,
-                        last_rotation: admin.firestore.FieldValue.serverTimestamp()
-                    });
-                    hayCambios = true;
-                }
-            }
-        });
-
-        if (hayCambios) await batch.commit();
-        return null;
-    } catch (error) {
-        console.error("Error en mantenimiento:", error);
-        return null;
+    if (roomsSnap.empty) {
+      console.log("Mantenimiento: No se encontraron habitaciones.");
+      return null;
     }
+
+    // 2. Crear un mapa de habitaciones que deberían estar ocupadas hoy
+    const occupiedRooms = new Set();
+    bookingsSnap.forEach((doc) => {
+      const booking = doc.data();
+      // Las fechas se guardan como 'YYYY-MM-DD'.
+      // Añadir 'T00:00:00' ayuda a evitar problemas de zona horaria en la conversión
+      const fechaIn = new Date(booking.checkInDate + "T00:00:00");
+      const fechaOut = new Date(booking.checkOutDate + "T00:00:00");
+
+      if (hoy >= fechaIn && hoy <= fechaOut) {
+        occupiedRooms.add(booking.roomId);
+      }
+    });
+
+    const batch = db.batch();
+    let hayCambios = false;
+
+    // 3. Iterar sobre cada habitación para actualizar estado y código
+    roomsSnap.forEach((roomDoc) => {
+      const roomRef = roomDoc.ref;
+      const roomData = roomDoc.data();
+      const roomId = roomDoc.id;
+
+      const updatePayload = {};
+
+      // --- Lógica de actualización de estado ---
+      const isOccupied = occupiedRooms.has(roomId);
+      const newStatus = isOccupied ? "Ocupada" : "Disponible";
+
+      // Solo actualizamos si el estado calculado es diferente al actual,
+      // y respetamos el estado 'Limpieza' que es manual.
+      if (roomData.status !== newStatus && roomData.status !== "Limpieza") {
+        updatePayload.status = newStatus;
+      }
+
+      // --- Lógica de rotación de código de emergencia ---
+      const pool = roomData.codes_pool;
+      if (Array.isArray(pool) && pool.length > 0) {
+        const randomIndex = Math.floor(Math.random() * pool.length);
+        const nuevoCodigo = String(pool[randomIndex]);
+
+        if (roomData.backup_code !== nuevoCodigo) {
+          updatePayload.backup_code = nuevoCodigo;
+          updatePayload.last_rotation = admin.firestore.FieldValue.serverTimestamp();
+        }
+      }
+
+      // Si hay algo que actualizar, lo añadimos al batch
+      if (Object.keys(updatePayload).length > 0) {
+        batch.update(roomRef, updatePayload);
+        hayCambios = true;
+      }
+    });
+
+    // 4. Ejecutar el batch si hubo cambios
+    if (hayCambios) {
+      await batch.commit();
+      console.log("Mantenimiento: Batch de actualizaciones completado.");
+    }
+
+    return null;
+  } catch (error) {
+    console.error(
+      "Error crítico en la función de mantenimiento de habitaciones:",
+      error
+    );
+    return null;
+  }
 });
+
 
 // ==========================================
 // --- FUNCIÓN 3: IA CONSERJE ---
