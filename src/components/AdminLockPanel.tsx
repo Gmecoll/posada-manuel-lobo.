@@ -3,16 +3,13 @@
 
 import { useState, useEffect } from 'react';
 import { httpsCallable } from 'firebase/functions';
-import { Lock, Unlock, RefreshCw, Battery, Signal, WifiOff, Fingerprint, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Lock, Unlock, RefreshCw, Battery, Signal, WifiOff, Fingerprint } from 'lucide-react';
 import { functions } from '@/firebaseConfig';
 
 const AdminLockPanel = () => {
   const [locks, setLocks] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [mounted, setMounted] = useState(false);
-  
-  const [feedback, setFeedback] = useState<{msg: string, type: 'success' | 'error'} | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -21,7 +18,6 @@ const AdminLockPanel = () => {
 
   const fetchLocks = async () => {
     setLoading(true);
-    setFeedback(null);
     try {
       const listarCerraduras = httpsCallable(functions, 'listarCerradurasTTLock');
       const result: any = await listarCerraduras();
@@ -36,37 +32,21 @@ const AdminLockPanel = () => {
         }));
         setLocks(listaMapeada);
       } else {
-        const errorMessage = result.data?.error || "No se pudo sincronizar la lista de cerraduras";
-        setFeedback({ msg: `Error: ${errorMessage}`, type: 'error' });
+        console.error("Error fetching locks:", result.data?.error || "No se pudo sincronizar la lista de cerraduras");
       }
     } catch (error: any) {
-      const detailedMessage = error.message || "Error de conexión con el servidor";
-      setFeedback({ msg: `Error: ${detailedMessage}`, type: 'error' });
+      console.error("Error fetching locks:", error.message || "Error de conexión con el servidor");
     } finally {
       setLoading(false);
     }
   };
 
   const handleUnlock = async (lockId: number) => {
-    setActionLoading(lockId);
-    setFeedback(null);
-    
     try {
       const abrir = httpsCallable(functions, 'abrirCerraduraRemote');
-      const res: any = await abrir({ lockId });
-      
-      if (res.data && res.data.success) {
-        setFeedback({ msg: "✅ Puerta abierta con éxito", type: 'success' });
-        setTimeout(() => setFeedback(null), 5000);
-      } else {
-        const errorMsg = res.data?.error || "Error desconocido al abrir";
-        setFeedback({ msg: `Error: ${errorMsg}`, type: 'error' });
-      }
+      await abrir({ lockId });
     } catch (e: any) {
-      const detailedMessage = e.message || "Error crítico de red o permisos";
-      setFeedback({ msg: `Error: ${detailedMessage}`, type: 'error' });
-    } finally {
-      setActionLoading(null);
+      console.error("Error unlocking:", e.message || "Error crítico de red o permisos");
     }
   };
 
@@ -93,18 +73,6 @@ const AdminLockPanel = () => {
           </button>
         </div>
       </div>
-
-      {feedback && (
-        <div className={`mb-6 p-4 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 border ${
-          feedback.type === 'success' 
-            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
-            : 'bg-red-500/10 border-red-500/20 text-red-400'
-        }`}>
-          {feedback.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-          <span className="text-sm font-medium">{feedback.msg}</span>
-          <button onClick={() => setFeedback(null)} className="ml-auto opacity-50 hover:opacity-100 text-xs">esc</button>
-        </div>
-      )}
 
       <div className="grid gap-4">
         {locks.length === 0 && !loading ? (
@@ -147,18 +115,14 @@ const AdminLockPanel = () => {
 
               <button
                 onClick={() => handleUnlock(lock.id)}
-                disabled={actionLoading === lock.id || !lock.online}
+                disabled={!lock.online}
                 className={`relative overflow-hidden flex items-center gap-2 px-6 py-3.5 rounded-xl font-black text-[10px] tracking-widest transition-all
                   ${lock.online 
                     ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400 hover:scale-105 active:scale-95 shadow-lg shadow-cyan-500/20' 
                     : 'bg-slate-800 text-slate-500 cursor-not-allowed'}`}
               >
-                {actionLoading === lock.id ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Unlock className="w-3.5 h-3.5" />
-                )}
-                {actionLoading === lock.id ? 'PROCESANDO...' : 'ABRIR AHORA'}
+                <Unlock className="w-3.5 h-3.5" />
+                ABRIR AHORA
               </button>
             </div>
           ))

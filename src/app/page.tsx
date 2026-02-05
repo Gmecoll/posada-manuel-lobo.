@@ -22,37 +22,28 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [firebaseError, setFirebaseError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [user, setUser] = useState<User | null>(null)
   const router = useRouter()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
+      if (currentUser) {
+        router.push("/dashboard")
+      }
     })
     // Cleanup subscription on unmount
     return () => unsubscribe()
-  }, [])
+  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
-    setFirebaseError(null)
 
     try {
       await signInWithEmailAndPassword(auth, email, password)
@@ -67,13 +58,9 @@ export default function AdminLoginPage() {
       } else {
         setError("Ocurrió un error inesperado. Por favor, intente de nuevo.")
       }
-      setFirebaseError(firebaseError.code || "Error desconocido")
       setIsLoading(false)
     }
   }
-
-  const adminUID = "TGaxvFAyCNRM79L36mN3S4X3qnu2"
-  const isUserAdmin = user?.uid === adminUID
 
   return (
     <main className="flex min-h-screen w-full flex-col items-center justify-center gap-8 bg-gray-100 p-4">
@@ -130,81 +117,6 @@ export default function AdminLoginPage() {
             Acceso exclusivo para administradores.
           </p>
         </CardFooter>
-      </Card>
-
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Datos de Depuración</CardTitle>
-          <CardDescription>
-            Credenciales de prueba e información de sesión en tiempo real.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Campo</TableHead>
-                <TableHead>Valor</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              <TableRow>
-                <TableCell>Email de prueba</TableCell>
-                <TableCell>usuario@pasada.com</TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell>Contraseña de prueba</TableCell>
-                <TableCell>palta</TableCell>
-              </TableRow>
-              {user ? (
-                <>
-                  <TableRow>
-                    <TableCell
-                      colSpan={2}
-                      className="bg-muted text-center font-semibold"
-                    >
-                      Usuario en Sesión
-                    </TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Usuario Registrado</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>UID Actual</TableCell>
-                    <TableCell>{user.uid}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Estado de Admin</TableCell>
-                    <TableCell>{isUserAdmin ? "SÍ ✅" : "NO ❌"}</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell>Nivel de Privilegios</TableCell>
-                    <TableCell>
-                      {isUserAdmin
-                        ? "Control Total (Lectura/Escritura)"
-                        : "Solo Lectura / Restringido"}
-                    </TableCell>
-                  </TableRow>
-                </>
-              ) : (
-                <TableRow>
-                  <TableCell>Estado de Sesión</TableCell>
-                  <TableCell>No autenticado</TableCell>
-                </TableRow>
-              )}
-
-              {firebaseError && (
-                <TableRow>
-                  <TableCell>Último error de Firebase</TableCell>
-                  <TableCell className="text-destructive">
-                    {firebaseError}
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
       </Card>
     </main>
   )
