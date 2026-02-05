@@ -57,10 +57,10 @@ exports.mantenimientoHabitaciones = onSchedule({
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0); // Normalizar a medianoche para comparación de fechas
 
-    // 1. Obtener todas las habitaciones y las reservas activas/bloqueadas
+    // 1. Obtener todas las habitaciones y las reservas activas (check-in, confirmadas y bloqueadas)
     const [roomsSnap, bookingsSnap] = await Promise.all([
       db.collection("rooms").get(),
-      db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada"]).get(),
+      db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada", "Confirmed"]).get(),
     ]);
 
     if (roomsSnap.empty) {
@@ -77,7 +77,9 @@ exports.mantenimientoHabitaciones = onSchedule({
       const fechaIn = new Date(booking.checkInDate + "T00:00:00");
       const fechaOut = new Date(booking.checkOutDate + "T00:00:00");
 
-      if (hoy >= fechaIn && hoy <= fechaOut) {
+      // La habitación está ocupada desde el día de check-in HASTA el día ANTERIOR al check-out.
+      // El día del check-out ya se considera disponible.
+      if (hoy >= fechaIn && hoy < fechaOut) {
         occupiedRooms.add(booking.roomId);
       }
     });
