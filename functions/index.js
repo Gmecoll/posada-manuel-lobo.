@@ -405,15 +405,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             };
             console.log("Resultado: APROBADO AUTOMÁTICAMENTE");
 
-        // --- POSIBILIDAD 2: REVISIÓN MANUAL (Duda razonable) ---
-        // Si hay al menos un match O hay mucho texto que podría ser un documento no reconocido
-        } else if (matches.length === 1 || textLength > 100) {
-            updateData = {
-                document_status: 'manual_review',
-                access_enabled: false, // Se mantiene bloqueado hasta que el admin lo vea
-                ocr_text: fullText.substring(0, 800)
-            };
-            console.log("Resultado: ENVIADO A REVISIÓN MANUAL");
+      
 
         // --- POSIBILIDAD 3: RECHAZADO (Baja confianza / Foto no válida) ---
         } else {
