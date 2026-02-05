@@ -23,6 +23,7 @@ import {
   ExternalLink,
   History,
   CheckCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -37,8 +38,11 @@ import Image from 'next/image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Textarea } from './ui/textarea';
+import { cn } from '@/lib/utils';
+import { Alert, AlertTitle } from './ui/alert';
 
-// Unified type for all bookings with document info
+// Tipo unificado para reservas con info de documentos
 type BookingWithDoc = {
   id: string;
   guest_name?: string;
@@ -46,23 +50,27 @@ type BookingWithDoc = {
   document_status?: string;
   room_number?: string;
   ocr_text?: string;
-  document_validated_at?: Timestamp; // Use the same field as the Cloud Function
+  document_validated_at?: Timestamp;
+  comments?: string;
 };
 
 export const AdminDocumentPanel: React.FC = () => {
-  // State for pending review
   const [pendingBookings, setPendingBookings] = useState<BookingWithDoc[]>([]);
   const [selectedDoc, setSelectedDoc] = useState<BookingWithDoc | null>(null);
   const [isPendingLoading, setIsPendingLoading] = useState(true);
 
-  // State for history
   const [historyBookings, setHistoryBookings] = useState<BookingWithDoc[]>([]);
   const [isHistoryLoading, setIsHistoryLoading] = useState(true);
 
-  // Shared error state
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch PENDING documents
+  // New state for history section
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(
+    null
+  );
+  const [currentComment, setCurrentComment] = useState('');
+
+  // 1. Fetch PENDING
   useEffect(() => {
     const q = query(
       collection(db, 'bookings'),
@@ -77,19 +85,13 @@ export const AdminDocumentPanel: React.FC = () => {
       q,
       (snapshot) => {
         const docs = snapshot.docs.map(
-          (d) =>
-            ({
-              id: d.id,
-              ...d.data(),
-            } as BookingWithDoc)
+          (d) => ({ id: d.id, ...d.data() }) as BookingWithDoc
         );
-
         setPendingBookings(docs);
         setIsPendingLoading(false);
-        setError(null);
       },
-      (error) => {
-        console.error('Error al obtener documentos pendientes:', error);
+      (err) => {
+        console.error('Error Pendientes:', err);
         setError(
           'Error al cargar documentos pendientes. Verifique los permisos de Firestore.'
         );
@@ -100,7 +102,7 @@ export const AdminDocumentPanel: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Fetch APPROVED documents for history
+  // 2. Fetch HISTORY
   useEffect(() => {
     const q = query(
       collection(db, 'bookings'),
@@ -112,19 +114,13 @@ export const AdminDocumentPanel: React.FC = () => {
       q,
       (snapshot) => {
         const docs = snapshot.docs.map(
-          (d) =>
-            ({
-              id: d.id,
-              ...d.data(),
-            } as BookingWithDoc)
+          (d) => ({ id: d.id, ...d.data() }) as BookingWithDoc
         );
-
         setHistoryBookings(docs);
         setIsHistoryLoading(false);
       },
-      (error) => {
-        console.error('Error al obtener historial de documentos:', error);
-        // Don't set a global error here if the other tab works
+      (err) => {
+        console.error('Error Historial (Posible falta de índice):', err);
         setIsHistoryLoading(false);
       }
     );
@@ -132,28 +128,53 @@ export const AdminDocumentPanel: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  const handleAction = async (id: string, status: 'approved' | 'not_uploaded') => {
+  const handleAction = async (
+    id: string,
+    status: 'approved' | 'not_uploaded'
+  ) => {
     try {
       const updateData: any = {
         document_status: status,
         access_enabled: status === 'approved',
       };
       if (status === 'approved') {
-        // Use the same field name as the OCR cloud function for consistency
         updateData.document_validated_at = serverTimestamp();
+      } else {
+        updateData.document_url = null;
       }
       await updateDoc(doc(db, 'bookings', id), updateData);
-
       if (selectedDoc?.id === id) setSelectedDoc(null);
     } catch (err) {
-      console.error('Error al actualizar estado:', err);
+      console.error('Error al actualizar:', err);
+    }
+  };
+
+  const handleToggleHistory = (booking: BookingWithDoc) => {
+    if (expandedHistoryId === booking.id) {
+      setExpandedHistoryId(null);
+    } else {
+      setExpandedHistoryId(booking.id);
+      setCurrentComment(booking.comments || '');
+    }
+  };
+
+  const handleSaveComment = async (bookingId: string) => {
+    if (!expandedHistoryId) return;
+    try {
+      const bookingRef = doc(db, 'bookings', bookingId);
+      await updateDoc(bookingRef, {
+        comments: currentComment,
+      });
+      // Optionally show a toast here
+    } catch (error) {
+      console.error('Error saving comment:', error);
     }
   };
 
   const formatTimestamp = (timestamp?: Timestamp) => {
-    if (!timestamp) return 'Fecha no disponible';
+    if (!timestamp) return 'Recién aprobado';
     const date = new Date(timestamp.seconds * 1000);
-    return format(date, "dd MMM yyyy, HH:mm'hs'", { locale: es });
+    return format(date, "dd MMM, HH:mm'hs'", { locale: es });
   };
 
   return (
@@ -164,8 +185,7 @@ export const AdminDocumentPanel: React.FC = () => {
             <FileText /> Verificación de Identidad
           </CardTitle>
           <CardDescription>
-            Revisa los documentos pendientes o consulta el historial de los ya
-            aprobados.
+            Gestión de documentos para acceso a cerraduras.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -175,209 +195,233 @@ export const AdminDocumentPanel: React.FC = () => {
           <TabsTrigger value="pending">
             Pendientes ({pendingBookings.length})
           </TabsTrigger>
-          <TabsTrigger value="history">Historial Aprobados</TabsTrigger>
+          <TabsTrigger value="history">
+            Historial ({historyBookings.length})
+          </TabsTrigger>
         </TabsList>
 
-        {/* PENDING TAB */}
         <TabsContent value="pending" className="mt-6">
           {error && (
-            <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed border-destructive bg-destructive/10">
-              <AlertCircle className="mx-auto text-destructive mb-4 h-12 w-12" />
-              <h3 className="text-lg font-bold text-destructive">
-                Error de Permisos
-              </h3>
-              <p className="text-destructive/80">{error}</p>
-            </Card>
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Error de Permisos</AlertTitle>
+              <p>{error}</p>
+            </Alert>
           )}
-          {!error && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                {isPendingLoading ? (
-                  <>
-                    <Skeleton className="h-20 w-full rounded-xl" />
-                    <Skeleton className="h-20 w-full rounded-xl" />
-                  </>
-                ) : pendingBookings.length === 0 ? (
-                  <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed">
-                    <Check className="mx-auto text-green-500 mb-4 h-12 w-12" />
-                    <p className="text-muted-foreground">
-                      No hay documentos pendientes de revisión.
-                    </p>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              {isPendingLoading ? (
+                <Skeleton className="h-20 w-full rounded-xl" />
+              ) : pendingBookings.length === 0 ? (
+                <Card className="p-12 text-center border-dashed border-2">
+                  <Check className="mx-auto text-green-500 mb-2" />
+                  <p className="text-muted-foreground text-sm">Todo al día.</p>
+                </Card>
+              ) : (
+                pendingBookings.map((b) => (
+                  <Card
+                    key={b.id}
+                    onClick={() => setSelectedDoc(b)}
+                    className={`cursor-pointer transition-colors ${
+                      selectedDoc?.id === b.id
+                        ? 'border-primary bg-primary/5'
+                        : ''
+                    }`}
+                  >
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div
+                          className={`p-2 rounded-full ${
+                            b.document_status === 'manual_review'
+                              ? 'bg-orange-100 text-orange-600'
+                              : 'bg-blue-100 text-blue-600'
+                          }`}
+                        >
+                          <Clock size={20} />
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm">
+                            {b.guest_name || 'Huésped'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Hab: {b.room_number}
+                          </p>
+                        </div>
+                      </div>
+                      <Eye size={16} className="text-muted-foreground" />
+                    </CardContent>
                   </Card>
-                ) : (
-                  pendingBookings.map((b) => (
-                    <Card
-                      key={b.id}
-                      onClick={() => setSelectedDoc(b)}
-                      className={`transition-all cursor-pointer hover:shadow-md ${
-                        selectedDoc?.id === b.id
-                          ? 'border-primary ring-1 ring-primary'
-                          : ''
-                      }`}
-                    >
-                      <CardContent className="p-4 flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div
-                            className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                              b.document_status === 'manual_review'
-                                ? 'bg-orange-100'
-                                : 'bg-blue-100'
-                            }`}
-                          >
-                            <Clock
-                              size={20}
-                              className={
-                                b.document_status === 'manual_review'
-                                  ? 'text-orange-500'
-                                  : 'text-blue-500'
-                              }
-                            />
-                          </div>
+                ))
+              )}
+            </div>
+
+            <div className="lg:sticky lg:top-6">
+              {selectedDoc ? (
+                <Card className="overflow-hidden shadow-lg border-t-4 border-primary">
+                  <CardHeader className="py-3 bg-muted/30 flex flex-row justify-between items-center">
+                    <CardTitle className="text-xs uppercase">
+                      Detalle del Documento
+                    </CardTitle>
+                    {selectedDoc.document_url && (
+                      <a
+                        href={selectedDoc.document_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary text-xs flex items-center gap-1"
+                      >
+                        <ExternalLink size={12} /> Ampliar
+                      </a>
+                    )}
+                  </CardHeader>
+                  <CardContent className="p-4 space-y-4">
+                    <div className="relative aspect-video w-full bg-black rounded-lg overflow-hidden border">
+                      {selectedDoc.document_url ? (
+                        <Image
+                          src={selectedDoc.document_url}
+                          alt="Doc"
+                          fill
+                          className="object-contain"
+                          unoptimized
+                        />
+                      ) : (
+                        <div className="flex items-center justify-center h-full text-white/50">
+                          <Loader2 />
+                        </div>
+                      )}
+                    </div>
+                    {selectedDoc.ocr_text && (
+                      <div className="p-2 bg-slate-100 rounded text-[10px] font-mono max-h-20 overflow-y-auto">
+                        <span className="text-primary font-bold">OCR:</span>{' '}
+                        {selectedDoc.ocr_text}
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={() => handleAction(selectedDoc.id, 'approved')}
+                        className="flex-1 bg-green-600 hover:bg-green-700"
+                      >
+                        <Check size={16} className="mr-2" /> Aprobar
+                      </Button>
+                      <Button
+                        onClick={() =>
+                          handleAction(selectedDoc.id, 'not_uploaded')
+                        }
+                        variant="destructive"
+                        className="flex-1"
+                      >
+                        <X size={16} className="mr-2" /> Rechazar
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="h-64 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-muted-foreground opacity-50">
+                  <Eye size={32} className="mb-2" />
+                  <p className="text-sm">Selecciona una revisión</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <Card>
+            <CardContent className="p-0">
+              {isHistoryLoading ? (
+                <Skeleton className="h-24 w-full m-4" />
+              ) : historyBookings.length === 0 ? (
+                <p className="text-center py-10 text-muted-foreground text-sm">
+                  No hay registros aún.
+                </p>
+              ) : (
+                <div className="space-y-1 p-2">
+                  {historyBookings.map((b) => (
+                    <Card key={b.id} className="overflow-hidden transition-all">
+                      <div
+                        onClick={() => handleToggleHistory(b)}
+                        className="flex items-center justify-between p-3 hover:bg-muted/10 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="text-green-500" size={20} />
                           <div>
-                            <h3 className="font-bold">
-                              {b.guest_name || 'Huésped Sin Nombre'}
-                            </h3>
-                            <p className="text-xs text-muted-foreground">
-                              Hab: {b.room_number || 'N/A'}
+                            <p className="text-sm font-bold">{b.guest_name}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              Hab: {b.room_number}
                             </p>
                           </div>
                         </div>
-                        <Eye size={18} className="text-muted-foreground" />
-                      </CardContent>
-                    </Card>
-                  ))
-                )}
-              </div>
-
-              <div className="lg:sticky lg:top-6">
-                {selectedDoc ? (
-                  <Card className="overflow-hidden shadow-xl border-t-4 border-t-primary animate-in fade-in slide-in-from-right-4">
-                    <CardHeader className="flex flex-row items-center justify-between bg-muted/30">
-                      <CardTitle className="text-sm font-bold uppercase tracking-wider">
-                        Documento del Huésped
-                      </CardTitle>
-                      {selectedDoc.document_url && (
-                        <a
-                          href={selectedDoc.document_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-primary hover:underline flex items-center gap-1 text-xs font-medium"
-                        >
-                          <ExternalLink size={14} /> Ver Original
-                        </a>
-                      )}
-                    </CardHeader>
-                    <CardContent className="p-4 space-y-4">
-                      <div className="relative aspect-[4/3] w-full bg-slate-950 rounded-lg overflow-hidden border shadow-inner">
-                        {selectedDoc.document_url ? (
-                          <Image
-                            src={selectedDoc.document_url}
-                            alt="Documento de identidad"
-                            fill
-                            unoptimized
-                            className="object-contain"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center h-full text-white/50 gap-2">
-                            <Loader2 className="animate-spin" />
-                            <p className="text-xs">Cargando imagen...</p>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <p className="text-[10px] font-medium text-green-600 uppercase">
+                              Aprobado
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {formatTimestamp(b.document_validated_at)}
+                            </p>
                           </div>
-                        )}
+                          <ChevronDown
+                            className={cn(
+                              'transition-transform',
+                              expandedHistoryId === b.id && 'rotate-180'
+                            )}
+                          />
+                        </div>
                       </div>
 
-                      {selectedDoc.ocr_text && (
-                        <div className="p-3 bg-muted rounded-md border text-[10px] font-mono text-muted-foreground max-h-24 overflow-y-auto">
-                          <p className="font-bold mb-1 text-primary">
-                            TEXTO DETECTADO POR OCR:
-                          </p>
-                          {selectedDoc.ocr_text}
+                      {expandedHistoryId === b.id && (
+                        <div className="p-4 border-t bg-slate-50/50 space-y-4 animate-in fade-in-0">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                              <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                                Documento Adjunto
+                              </h4>
+                              {b.document_url ? (
+                                <a
+                                  href={b.document_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block relative aspect-video w-full bg-black rounded-lg overflow-hidden border hover:opacity-90 transition-opacity"
+                                >
+                                  <Image
+                                    src={b.document_url}
+                                    alt="Documento"
+                                    fill
+                                    className="object-contain"
+                                    unoptimized
+                                  />
+                                </a>
+                              ) : (
+                                <div className="aspect-video w-full flex items-center justify-center bg-slate-100 text-muted-foreground text-sm rounded-lg">
+                                  No hay imagen asociada.
+                                </div>
+                              )}
+                            </div>
+                            <div className="space-y-2 flex flex-col">
+                              <h4 className="text-xs font-semibold uppercase text-muted-foreground">
+                                Comentarios
+                              </h4>
+                              <Textarea
+                                placeholder="Añadir un comentario interno..."
+                                value={currentComment}
+                                onChange={(e) =>
+                                  setCurrentComment(e.target.value)
+                                }
+                                className="flex-grow"
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => handleSaveComment(b.id)}
+                                className="self-end"
+                              >
+                                Guardar Comentario
+                              </Button>
+                            </div>
+                          </div>
                         </div>
                       )}
-
-                      <div className="flex gap-3 pt-2">
-                        <Button
-                          onClick={() =>
-                            handleAction(selectedDoc.id, 'approved')
-                          }
-                          className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold"
-                        >
-                          <Check size={18} className="mr-2" /> APROBAR
-                        </Button>
-                        <Button
-                          onClick={() =>
-                            handleAction(selectedDoc.id, 'not_uploaded')
-                          }
-                          className="flex-1 font-bold"
-                          variant="destructive"
-                        >
-                          <X size={18} className="mr-2" /> RECHAZAR
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : (
-                  <div className="h-[400px] border-2 border-dashed rounded-3xl flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-                    <Eye size={48} className="mb-4 opacity-10" />
-                    <p className="font-medium">
-                      Selecciona un documento para verificar
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* HISTORY TAB */}
-        <TabsContent value="history" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="font-headline flex items-center gap-2">
-                <History /> Historial de Aprobados
-              </CardTitle>
-              <CardDescription>
-                Listado de los últimos documentos de identidad que han sido
-                verificados y aprobados.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isHistoryLoading ? (
-                Array.from({ length: 3 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-full rounded-xl" />
-                ))
-              ) : historyBookings.length === 0 ? (
-                <div className="flex flex-col items-center justify-center p-12 text-center border-dashed rounded-lg">
-                  <CheckCircle className="mx-auto text-muted-foreground/50 mb-4 h-12 w-12" />
-                  <p className="text-muted-foreground">
-                    Aún no se han aprobado documentos.
-                  </p>
+                    </Card>
+                  ))}
                 </div>
-              ) : (
-                historyBookings.map((b) => (
-                  <Card key={b.id}>
-                    <CardContent className="p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full flex items-center justify-center bg-green-100">
-                          <CheckCircle size={20} className="text-green-600" />
-                        </div>
-                        <div>
-                          <h3 className="font-bold">
-                            {b.guest_name || 'Huésped Sin Nombre'}
-                          </h3>
-                          <p className="text-xs text-muted-foreground">
-                            Hab: {b.room_number || 'N/A'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium">Aprobado</p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatTimestamp(b.document_validated_at)}
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
               )}
             </CardContent>
           </Card>
@@ -387,18 +431,11 @@ export const AdminDocumentPanel: React.FC = () => {
   );
 };
 
-// Componente Loader auxiliar si no existe en tu carpeta UI
-const Loader2 = ({
-  className,
-  size = 20,
-}: {
-  className?: string;
-  size?: number;
-}) => (
+const Loader2 = ({ className }: { className?: string }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    height={size}
+    width="20"
+    height="20"
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"

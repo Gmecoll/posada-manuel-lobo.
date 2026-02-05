@@ -30,6 +30,7 @@ export type Booking = {
   documentUrl?: string;
   ocrText?: string;
   verifiedAt?: any;
+  comments?: string;
 };
 
 export type Service = {
