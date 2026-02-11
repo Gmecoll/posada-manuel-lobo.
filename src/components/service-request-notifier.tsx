@@ -220,39 +220,48 @@ export function ServiceRequestNotifier() {
           <AlertDialogContent>
             <AlertDialogHeader>
               <AlertDialogTitle className="font-headline text-2xl">¡Nueva Solicitud de Servicio!</AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="pt-4 space-y-4 text-foreground">
-                  {serviceForCurrentRequest?.imageUrl && (
-                    <div className="relative aspect-video w-full rounded-lg overflow-hidden border">
-                      <Image
-                        src={serviceForCurrentRequest.imageUrl}
-                        alt={currentRequest.nombreServicio}
-                        fill
-                        className="object-cover"
-                      />
-                    </div>
-                  )}
-                  <div className="text-base space-y-2">
-                    <p><strong>Huésped:</strong> {currentRequest.guestName}</p>
-                    <p><strong>Habitación:</strong> {currentRequest.roomNumber || 'N/A'}</p>
-                    <p><strong>Servicio:</strong> {currentRequest.nombreServicio}</p>
-                    <p><strong>Cantidad:</strong> {currentRequest.cantidad}</p>
-                    <p><strong>Monto:</strong> UY$ {currentRequest.monto.toFixed(2)}</p>
-                    <p><strong>Fecha de Compra:</strong> {formatTimestamp(currentRequest.fecha)}</p>
-                    {currentRequest.reservationDate && (
-                      <p><strong>Fecha de Reserva:</strong> {currentRequest.reservationDate} {currentRequest.reservationTime || ''}</p>
-                    )}
-                    <p><strong>Estado del Pago:</strong> <Badge variant={currentRequest.estado_pago === 'completado' ? 'default' : 'secondary'}>{currentRequest.estado_pago}</Badge></p>
-                    {currentRequest.comentarios && (
-                      <div className="space-y-1">
-                          <p><strong>Comentarios:</strong></p>
-                          <p className="text-sm p-2 bg-muted rounded-md">{currentRequest.comentarios}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <AlertDialogDescription>
+                Información detallada de la solicitud del huésped.
               </AlertDialogDescription>
             </AlertDialogHeader>
+            
+            <div className="space-y-4 text-foreground max-h-[60vh] overflow-y-auto pr-4 -mr-2">
+              {serviceForCurrentRequest?.imageUrl && (
+                <div className="relative aspect-video w-full rounded-lg overflow-hidden border">
+                  <Image
+                    src={serviceForCurrentRequest.imageUrl}
+                    alt={currentRequest.nombreServicio}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+              )}
+              <div className="text-base space-y-2">
+                <p><strong>Huésped:</strong> {currentRequest.guestName}</p>
+                <p><strong>Habitación:</strong> {currentRequest.roomNumber || 'N/A'}</p>
+                <p><strong>Servicio:</strong> {currentRequest.nombreServicio}</p>
+                <p><strong>Cantidad:</strong> {currentRequest.cantidad}</p>
+                <p><strong>Monto:</strong> UY$ {currentRequest.monto.toFixed(2)}</p>
+                <p><strong>Fecha de Compra:</strong> {formatTimestamp(currentRequest.fecha)}</p>
+                {currentRequest.reservationDate && (
+                  <p><strong>Fecha de Reserva:</strong> {currentRequest.reservationDate} {currentRequest.reservationTime || ''}</p>
+                )}
+                <div><strong>Estado del Pago:</strong>{' '}
+                  <Badge variant={currentRequest.estado_pago === 'completado' ? 'default' : 'secondary'}>
+                    {currentRequest.estado_pago}
+                  </Badge>
+                </div>
+                {currentRequest.comentarios && (
+                  <div className="space-y-1">
+                      <p><strong>Comentarios:</strong></p>
+                      <blockquote className="mt-1 border-l-2 pl-4 italic text-sm text-muted-foreground">
+                        {currentRequest.comentarios}
+                      </blockquote>
+                  </div>
+                )}
+              </div>
+            </div>
+
             <AlertDialogFooter>
               <AlertDialogAction onClick={handleMarkAsRead}>Marcar como visto</AlertDialogAction>
             </AlertDialogFooter>
