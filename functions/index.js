@@ -1,8 +1,9 @@
 // 1. IMPORTACIONES ÚNICAS
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const { defineSecret } = require('firebase-functions/params');
+const logger = require("firebase-functions/logger"); 
 const admin = require('firebase-admin');
 const axios = require('axios');
 const crypto = require('crypto');
@@ -15,7 +16,9 @@ const db = admin.firestore();
 
 // 3. CONFIGURACIONES Y SECRETOS
 const ADMIN_EMAIL = "gmecollg@gmail.com";
+// Definimos los secretos aquí para usarlos en las funciones
 const MERCADO_PAGO_ACCESS_TOKEN = defineSecret('MERCADO_PAGO_ACCESS_TOKEN');
+const ANAM_API_KEY = defineSecret("ANAM_API_KEY"); 
 
 // ==========================================
 // --- FUNCIÓN 1: INICIAR PAGO SERVICIO (MERCADO PAGO) ---
@@ -70,6 +73,20 @@ exports.iniciarPagoServicio = onCall({
             preferenceId: result.id,
             reservationDate, reservationTime,
             createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        await db.collection('solicitudes_servicios').add({
+            servicioId: serviceId,
+            nombreServicio: serviceData.title,
+            monto: Number(serviceData.price) * Number(quantity),
+            currency: 'UYU',
+            cantidad: Number(quantity),
+            fecha: admin.firestore.FieldValue.serverTimestamp(),
+            estado_pago: 'pendiente',
+            usuarioId: userId,
+            guestName: guestName,
+            roomNumber: roomNumber,
+            leido: false,
         });
 
         return { id: result.id, init_point: result.init_point };
@@ -216,7 +233,6 @@ exports.abrirCerraduraRemote = onCall({
     if (querySnapshot.empty) throw new HttpsError('permission-denied', 'Reserva no encontrada.');
     
     const bData = querySnapshot.docs[0].data();
-    // Validación de fechas y accesos... (Lógica mantenida)
     const roomId = bData.roomId || bData.room_number || bData.roomNumber;
     const roomSnap = await db.collection('rooms').doc(`room-${String(roomId).replace(/^(room-)/, '')}`).get();
     const lockIdReal = roomSnap.exists ? (roomSnap.data().lockId || roomSnap.data().lock_id) : null;
@@ -318,3 +334,51 @@ exports.validarDocumentoHuesped = onObjectFinalized({
     } catch (e) { console.error("OCR Error:", e); }
     return null;
 });
+
+// ==========================================
+// --- FUNCIÓN 8: SKY ROOMS AI (ANAM TOKEN - SECURE) ---
+// ==========================================
+
+//const ANAM_PERSONA_ID = "01f755de-1bd6-428a-9ac0-93c5ae6007c3";
+const ANAM_PERSONA_ID = "89760c52-643c-4465-89cc-3d708e11ae36";
+exports.anamToken = onRequest(
+  { 
+    region: "us-central1",
+    cors: true, 
+    secrets: [ANAM_API_KEY] // 2. ¡IMPORTANTE! Damos permiso a la función para leerlo
+  }, 
+  async (request, response) => {
+    try {
+      // 3. Leemos el valor del secreto (NO está escrito en el código)
+      const apiKey = ANAM_API_KEY.value(); 
+
+      const apiResponse = await fetch("https://api.anam.ai/v1/auth/session-token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`, // Usamos la variable segura
+        },
+        body: JSON.stringify({
+            personaConfig: {
+                personaId: ANAM_PERSONA_ID
+            }
+        }),
+      });
+
+      const data = await apiResponse.json();
+      
+      // Manejo de error de la API de Anam
+      if (!apiResponse.ok) {
+          console.error("Error respuesta Anam:", data);
+          response.status(apiResponse.status).json(data);
+          return;
+      }
+
+      response.json(data);
+
+    } catch (error) {
+      logger.error("Error obteniendo token:", error);
+      response.status(500).send("Error interno");
+    }
+  }
+);
