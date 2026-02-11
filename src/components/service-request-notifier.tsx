@@ -172,6 +172,22 @@ export function ServiceRequestNotifier() {
     return format(date, "dd/MM/yy, HH:mm'hs'", { locale: es });
   };
   
+  const formatReservationDateTime = (dateStr?: string, timeStr?: string) => {
+    if (!dateStr) return 'No especificada';
+    
+    // The incoming dateStr could be yyyy-MM-dd or other formats. Time is HH:mm.
+    const dateTimeString = `${dateStr}T${timeStr || '00:00:00'}`;
+    const date = new Date(dateTimeString);
+
+    // Check if the parsed date is valid
+    if (isNaN(date.getTime())) {
+      // If parsing fails, return the original strings as a fallback.
+      return `${dateStr} ${timeStr || ''}`.trim();
+    }
+    
+    return format(date, "dd/MM/yy, HH:mm'hs'", { locale: es });
+  };
+
   const reportData = useMemo(() => {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -244,7 +260,7 @@ export function ServiceRequestNotifier() {
                 <p><strong>Monto:</strong> UY$ {currentRequest.monto.toFixed(2)}</p>
                 <p><strong>Fecha de Compra:</strong> {formatTimestamp(currentRequest.fecha)}</p>
                 {currentRequest.reservationDate && (
-                  <p><strong>Fecha de Reserva:</strong> {currentRequest.reservationDate} {currentRequest.reservationTime || ''}</p>
+                  <p><strong>Fecha de Reserva:</strong> {formatReservationDateTime(currentRequest.reservationDate, currentRequest.reservationTime)}</p>
                 )}
                 <div><strong>Estado del Pago:</strong>{' '}
                   <Badge variant={currentRequest.estado_pago === 'completado' ? 'default' : 'secondary'}>
