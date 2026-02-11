@@ -16,7 +16,6 @@ const db = admin.firestore();
 
 // 3. CONFIGURACIONES Y SECRETOS
 const ADMIN_EMAIL = "gmecollg@gmail.com";
-// Definimos los secretos aquí para usarlos en las funciones
 const MERCADO_PAGO_ACCESS_TOKEN = defineSecret('MERCADO_PAGO_ACCESS_TOKEN');
 const ANAM_API_KEY = defineSecret("ANAM_API_KEY"); 
 
@@ -27,7 +26,8 @@ exports.iniciarPagoServicio = onCall({
     region: "us-central1", 
     secrets: [MERCADO_PAGO_ACCESS_TOKEN] 
 }, async (request) => {
-    const { serviceId, quantity, userId, guestName, roomNumber, reservationDate, reservationTime, comments } = request.data;
+    // AÑADIDO: extraemos externalReference y los comments
+    const { serviceId, quantity, userId, guestName, roomNumber, reservationDate, reservationTime, comments, externalReference } = request.data;
 
     try {
         if (!serviceId || !userId) {
@@ -40,7 +40,7 @@ exports.iniciarPagoServicio = onCall({
         }
         const serviceData = serviceDoc.data();
 
-        // SDK V2
+        // SDK V2 Mercado Pago
         const { MercadoPagoConfig, Preference } = require('mercadopago');
         const client = new MercadoPagoConfig({ 
             accessToken: MERCADO_PAGO_ACCESS_TOKEN.value() 
@@ -65,29 +65,31 @@ exports.iniciarPagoServicio = onCall({
             }
         });
 
-        await db.collection('orders').add({
-            userId, guestName, roomNumber, serviceId,
-            serviceTitle: serviceData.title,
-            total: Number(serviceData.price) * Number(quantity),
-            status: 'pending',
-            preferenceId: result.id,
-            reservationDate, reservationTime,
-            createdAt: admin.firestore.FieldValue.serverTimestamp()
-        });
+     
 
-        await db.collection('solicitudes_servicios').add({
-            servicioId: serviceId,
-            nombreServicio: serviceData.title,
-            monto: Number(serviceData.price) * Number(quantity),
-            currency: 'UYU',
-            cantidad: Number(quantity),
-            fecha: admin.firestore.FieldValue.serverTimestamp(),
-            estado_pago: 'pendiente',
-            usuarioId: userId,
-            guestName: guestName,
-            roomNumber: roomNumber,
-            leido: false,
-        });
+        // 1. CORRECCIÓN: Guardamos en solicitudes_servicios para la Campana de Notificaciones
+        const requestId = externalReference || `solicitud-${Date.now()}`;
+        
+      // Limpiamos la variable para quitarle la palabra "room-" si la trae
+      const cleanRoomNumber = roomNumber ? String(roomNumber).replace('room-', '') : "N/A";
+
+      await db.collection('solicitudes_servicios').doc(requestId).set({
+          cantidad: Number(quantity),
+          currency: 'UYU',
+          estado_pago: 'pendiente',
+          external_reference: requestId,
+          fecha: admin.firestore.FieldValue.serverTimestamp(), // Timestamp seguro
+          guestName: guestName,
+          leido: false,
+          monto: Number(serviceData.price) * Number(quantity),
+          nombreServicio: serviceData.title,
+          roomNumber: cleanRoomNumber, // <--- Aquí usamos el número limpio
+          servicioId: serviceId,
+          usuarioId: userId,
+          reservationDate: reservationDate || null,
+          reservationTime: reservationTime || null,
+          comentarios: comments || ""
+      });
 
         return { id: result.id, init_point: result.init_point };
 
@@ -283,7 +285,7 @@ exports.listarCerradurasTTLock = onCall({
             params: { clientId: process.env.TTLOCK_CLIENT_ID, accessToken, pageNo: 1, pageSize: 100, date: Date.now() }
         });
 
-        if (response.data.errcode === 10003) { // Refresh Token logic
+        if (response.data.errcode === 10003) { 
             const params = new URLSearchParams({
                 client_id: process.env.TTLOCK_CLIENT_ID,
                 client_secret: process.env.TTLOCK_CLIENT_SECRET,
@@ -336,27 +338,24 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 });
 
 // ==========================================
-// --- FUNCIÓN 8: SKY ROOMS AI (ANAM TOKEN - SECURE) ---
+// --- FUNCIÓN 8: SKY ROOMS AI (ANAM TOKEN) ---
 // ==========================================
-
-//const ANAM_PERSONA_ID = "01f755de-1bd6-428a-9ac0-93c5ae6007c3";
 const ANAM_PERSONA_ID = "89760c52-643c-4465-89cc-3d708e11ae36";
 exports.anamToken = onRequest(
   { 
     region: "us-central1",
     cors: true, 
-    secrets: [ANAM_API_KEY] // 2. ¡IMPORTANTE! Damos permiso a la función para leerlo
+    secrets: [ANAM_API_KEY] 
   }, 
   async (request, response) => {
     try {
-      // 3. Leemos el valor del secreto (NO está escrito en el código)
       const apiKey = ANAM_API_KEY.value(); 
 
       const apiResponse = await fetch("https://api.anam.ai/v1/auth/session-token", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`, // Usamos la variable segura
+          "Authorization": `Bearer ${apiKey}`, 
         },
         body: JSON.stringify({
             personaConfig: {
@@ -367,7 +366,6 @@ exports.anamToken = onRequest(
 
       const data = await apiResponse.json();
       
-      // Manejo de error de la API de Anam
       if (!apiResponse.ok) {
           console.error("Error respuesta Anam:", data);
           response.status(apiResponse.status).json(data);

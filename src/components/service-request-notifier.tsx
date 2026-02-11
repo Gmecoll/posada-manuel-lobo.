@@ -46,13 +46,20 @@ import { useToast } from '@/hooks/use-toast';
 import { Bell, DollarSign, Package, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import type { ServiceRequest as ServiceRequestData } from '@/lib/data';
+import type { ServiceRequest as ServiceRequestData, Service } from '@/lib/data';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import Image from 'next/image';
 
 interface ServiceRequest extends ServiceRequestData {
   id: string;
   fecha: Timestamp;
+  guestName: string;
+  roomNumber: string;
+  leido: boolean;
+  comentarios: string;
+  reservationDate?: string;
+  reservationTime?: string;
 }
 
 export function ServiceRequestNotifier() {
@@ -61,6 +68,25 @@ export function ServiceRequestNotifier() {
   const [currentRequest, setCurrentRequest] = useState<ServiceRequest | null>(null);
   const [isReportOpen, setIsReportOpen] = useState(false);
   const { toast } = useToast();
+  const [services, setServices] = useState<Service[]>([]);
+
+  useEffect(() => {
+    const servicesCol = collection(db, "services");
+    const unsubscribe = onSnapshot(
+      servicesCol,
+      (snapshot) => {
+        const servicesFromDb = snapshot.docs.map(
+          (doc) => ({ id: doc.id, ...doc.data() }) as Service
+        );
+        setServices(servicesFromDb);
+      },
+      (error) => {
+        console.error("Error fetching services for notifier:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     // Listen for requests to update the badge and queue.
@@ -102,6 +128,11 @@ export function ServiceRequestNotifier() {
 
     return () => unsubscribe();
   }, []);
+
+  const serviceForCurrentRequest = useMemo(() => {
+    if (!currentRequest || services.length === 0) return null;
+    return services.find(s => s.id === currentRequest.servicioId);
+  }, [currentRequest, services]);
 
   const handleCircleClick = () => {
     if (newRequests.length > 0) {
@@ -190,11 +221,35 @@ export function ServiceRequestNotifier() {
             <AlertDialogHeader>
               <AlertDialogTitle className="font-headline text-2xl">¡Nueva Solicitud de Servicio!</AlertDialogTitle>
               <AlertDialogDescription asChild>
-                <div className="text-base pt-4 space-y-2 text-foreground">
-                  <p><strong>Huésped:</strong> {currentRequest.guestName}</p>
-                  <p><strong>Habitación:</strong> {currentRequest.roomNumber || 'N/A'}</p>
-                  <p><strong>Servicio:</strong> {currentRequest.nombreServicio}</p>
-                  <p><strong>Monto:</strong> UY$ {currentRequest.monto.toFixed(2)}</p>
+                <div className="pt-4 space-y-4 text-foreground">
+                  {serviceForCurrentRequest?.imageUrl && (
+                    <div className="relative aspect-video w-full rounded-lg overflow-hidden border">
+                      <Image
+                        src={serviceForCurrentRequest.imageUrl}
+                        alt={currentRequest.nombreServicio}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="text-base space-y-2">
+                    <p><strong>Huésped:</strong> {currentRequest.guestName}</p>
+                    <p><strong>Habitación:</strong> {currentRequest.roomNumber || 'N/A'}</p>
+                    <p><strong>Servicio:</strong> {currentRequest.nombreServicio}</p>
+                    <p><strong>Cantidad:</strong> {currentRequest.cantidad}</p>
+                    <p><strong>Monto:</strong> UY$ {currentRequest.monto.toFixed(2)}</p>
+                    <p><strong>Fecha de Compra:</strong> {formatTimestamp(currentRequest.fecha)}</p>
+                    {currentRequest.reservationDate && (
+                      <p><strong>Fecha de Reserva:</strong> {currentRequest.reservationDate} {currentRequest.reservationTime || ''}</p>
+                    )}
+                    <p><strong>Estado del Pago:</strong> <Badge variant={currentRequest.estado_pago === 'completado' ? 'default' : 'secondary'}>{currentRequest.estado_pago}</Badge></p>
+                    {currentRequest.comentarios && (
+                      <div className="space-y-1">
+                          <p><strong>Comentarios:</strong></p>
+                          <p className="text-sm p-2 bg-muted rounded-md">{currentRequest.comentarios}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </AlertDialogDescription>
             </AlertDialogHeader>
