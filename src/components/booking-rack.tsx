@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, useEffect } from "react"
@@ -37,6 +36,7 @@ const getRoomNumber = (name: string) => {
 export function BookingRack() {
   const [rooms, setRooms] = useState<Room[]>([])
   const [bookings, setBookings] = useState<Booking[]>([])
+  const [roomsMap, setRoomsMap] = useState<Map<string, Room>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false)
   const [bookingToEdit, setBookingToEdit] =
@@ -48,7 +48,7 @@ export function BookingRack() {
   const { toast } = useToast()
 
   useEffect(() => {
-    setIsLoading(true)
+    setIsLoading(true);
     const roomsCol = collection(db, "rooms")
     const unsubscribeRooms = onSnapshot(
       roomsCol,
@@ -62,7 +62,18 @@ export function BookingRack() {
             (a, b) => getRoomNumber(a.name) - getRoomNumber(b.name)
           ) as Room[]
         setRooms(roomsFromDb)
-        if (snapshot.size > 0) setIsLoading(false)
+
+        const newRoomsMap = new Map<string, Room>();
+        roomsFromDb.forEach(room => {
+          if(room.room_id_cloudbeds) {
+            newRoomsMap.set(room.room_id_cloudbeds, room);
+          }
+        });
+        setRoomsMap(newRoomsMap);
+        
+        if (snapshot.size > 0) {
+          setIsLoading(false)
+        }
       },
       (error) => {
         console.error("Error fetching rooms for rack:", error)
@@ -70,13 +81,24 @@ export function BookingRack() {
       }
     )
 
+    return () => unsubscribeRooms()
+  }, [])
+
+  useEffect(() => {
+    if (roomsMap.size === 0) return;
+
     const bookingsCol = collection(db, "bookings")
     const unsubscribeBookings = onSnapshot(
       bookingsCol,
       (snapshot) => {
         const bookingsFromDb = snapshot.docs.map((doc) => {
           const data = doc.data()
-          return { id: doc.id, ...data } as Booking
+          const room = data.room_id_cloudbeds ? roomsMap.get(data.room_id_cloudbeds) : null;
+          return { 
+              id: doc.id, 
+              ...data,
+              roomId: room ? room.id : '',
+            } as Booking
         })
         setBookings(bookingsFromDb)
       },
@@ -85,11 +107,8 @@ export function BookingRack() {
       }
     )
 
-    return () => {
-      unsubscribeRooms()
-      unsubscribeBookings()
-    }
-  }, [])
+    return () => unsubscribeBookings()
+  }, [roomsMap])
 
   const today = startOfDay(new Date())
   const days = Array.from({ length: 30 }, (_, i) => addDays(today, i))
