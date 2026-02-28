@@ -22,8 +22,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import type { Booking } from "@/lib/data"
 
 export default function GuestLoginPage() {
-  const [roomNumber, setRoomNumber] = useState("")
-  const [booking_id, setBookingId] = useState("")
+  const [roomName, setRoomName] = useState("")
+  const [bookingId, setBookingId] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
@@ -33,11 +33,11 @@ export default function GuestLoginPage() {
     setIsLoading(true)
     setError(null)
 
-    const normalizedRoomNumber = roomNumber.trim()
-    const normalizedBookingId = booking_id.trim()
+    const normalizedRoomName = roomName.trim()
+    const normalizedBookingId = bookingId.trim()
 
-    if (!normalizedRoomNumber || !normalizedBookingId) {
-      setError("Por favor, ingrese el número de habitación y su ID de reserva.")
+    if (!normalizedRoomName || !normalizedBookingId) {
+      setError("Por favor, ingrese el nombre de habitación y su N° de reserva.")
       setIsLoading(false)
       return
     }
@@ -45,14 +45,14 @@ export default function GuestLoginPage() {
     try {
       const bookingsQuery = query(
         collection(db, "bookings"),
-        where("booking_id", "==", normalizedBookingId),
-        where("room_number", "==", normalizedRoomNumber)
+        where("booking_id_cloudbeds", "==", normalizedBookingId),
+        where("room_name", "==", normalizedRoomName)
       )
       const bookingsSnapshot = await getDocs(bookingsQuery)
 
       if (bookingsSnapshot.empty) {
         setError(
-          "ID de reserva o número de habitación incorrecto. Por favor, verifique sus datos."
+          "N° de reserva o nombre de habitación incorrecto. Por favor, verifique sus datos."
         )
         setIsLoading(false)
         return
@@ -63,7 +63,9 @@ export default function GuestLoginPage() {
         ...bookingsSnapshot.docs[0].data(),
       } as Booking
 
-      if (foundBooking.access_enabled && foundBooking.status === "Checked-In") {
+      const normalizedStatus = foundBooking.status === 'checked_in' ? 'Checked-In' : foundBooking.status;
+
+      if (foundBooking.access_enabled && normalizedStatus === "Checked-In") {
         router.push(`/access/${foundBooking.id}`)
       } else {
         setError(
@@ -95,14 +97,14 @@ export default function GuestLoginPage() {
                 htmlFor="room"
                 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
               >
-                Habitación
+                Nombre Habitación
               </Label>
               <Input
                 id="room"
                 type="text"
-                placeholder="4"
-                value={roomNumber}
-                onChange={(e) => setRoomNumber(e.target.value)}
+                placeholder="es(1)"
+                value={roomName}
+                onChange={(e) => setRoomName(e.target.value)}
                 required
               />
             </div>
@@ -117,7 +119,7 @@ export default function GuestLoginPage() {
                 id="booking_id"
                 type="text"
                 placeholder="1234567"
-                value={booking_id}
+                value={bookingId}
                 onChange={(e) => setBookingId(e.target.value)}
                 required
               />

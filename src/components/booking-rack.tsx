@@ -40,7 +40,7 @@ export function BookingRack() {
   const [isLoading, setIsLoading] = useState(true)
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false)
   const [bookingToEdit, setBookingToEdit] =
-    useState<(Booking & { room: Room }) | null>(null)
+    useState<(Booking & { room: Room | null }) | null>(null)
   const [newBookingDefaults, setNewBookingDefaults] = useState<{
     roomId: string
     checkInDate: string
@@ -99,14 +99,14 @@ export function BookingRack() {
       .filter((b) => b.roomId === roomId && b.status !== "Cancelled")
       .sort(
         (a, b) =>
-          new Date(a.checkInDate).getTime() - new Date(b.checkInDate).getTime()
+          new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
       )
 
     const segments: { booking: Booking; start: number; span: number }[] = []
 
     roomBookings.forEach((booking) => {
-      const checkIn = startOfDay(new Date(booking.checkInDate + "T00:00:00"))
-      const checkOut = startOfDay(new Date(booking.checkOutDate + "T00:00:00"))
+      const checkIn = startOfDay(new Date(booking.check_in + "T00:00:00"))
+      const checkOut = startOfDay(new Date(booking.check_out + "T00:00:00"))
 
       if (checkOut <= today || checkIn > days[days.length - 1]) {
         return
@@ -145,7 +145,7 @@ export function BookingRack() {
   }
 
   const handleBookingClick = (booking: Booking) => {
-    const room = rooms.find((r) => r.id === booking.roomId)
+    const room = rooms.find((r) => r.id === booking.roomId) ?? null
     if (room) {
       setBookingToEdit({ ...booking, room })
       setNewBookingDefaults(null)
@@ -157,27 +157,28 @@ export function BookingRack() {
     const isEditing = !!bookingToEdit
 
     try {
-      const matchedRoom = rooms.find((r) => r.id === bookingData.roomId)
+      const selectedRoom = rooms.find((r) => r.id === bookingData.roomId)
 
-      if (!matchedRoom?.name) {
+      if (!selectedRoom?.name || !selectedRoom?.room_id_cloudbeds) {
         toast({
           variant: "destructive",
           title: "Error de Habitación",
-          description: "Habitación inválida.",
+          description: "La habitación seleccionada no es válida o no está sincronizada con Cloudbeds.",
         })
         return
       }
+
 
       const checkIn = parse(bookingData.checkInDate, "dd/MM/yyyy", new Date())
       const checkOut = parse(bookingData.checkOutDate, "dd/MM/yyyy", new Date())
 
       const bookingToSave = {
         guest_name: bookingData.guest_name,
-        booking_id: bookingData.status === 'Bloqueada' ? `block-${new Date().getTime()}` : bookingData.booking_id,
-        roomId: bookingData.roomId,
-        room_number: matchedRoom.name,
-        checkInDate: format(checkIn, "yyyy-MM-dd"),
-        checkOutDate: format(checkOut, "yyyy-MM-dd"),
+        booking_id_cloudbeds: bookingData.status === 'Bloqueada' ? `block-${new Date().getTime()}` : bookingData.booking_id,
+        room_id_cloudbeds: selectedRoom.room_id_cloudbeds,
+        room_name: selectedRoom.name,
+        check_in: format(checkIn, "yyyy-MM-dd"),
+        check_out: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,
         access_enabled: bookingData.status === "Checked-In",
       }
@@ -207,6 +208,7 @@ export function BookingRack() {
   const bookingStatusColors: Record<string, string> = {
     Confirmed: "bg-blue-500 border-blue-700 text-white",
     "Checked-In": "bg-green-500 border-green-700 text-white",
+    checked_in: "bg-green-500 border-green-700 text-white",
     "Checked-Out": "bg-gray-400 border-gray-600 text-white",
     Bloqueada: "bg-red-500 border-red-700 text-white",
   }

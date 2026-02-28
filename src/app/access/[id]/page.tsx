@@ -90,18 +90,20 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
       </div>
     )
   }
+  
+  const normalizedStatus = booking.status === 'checked_in' ? 'Checked-In' : booking.status;
 
   const accessDeniedByStatus =
-    !booking.access_enabled || booking.status !== "Checked-In"
+    !booking.access_enabled || normalizedStatus !== "Checked-In"
 
   // Date validation logic
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // Date without time
   let accessExpired = false
-  if (booking.checkInDate && booking.checkOutDate) {
+  if (booking.check_in && booking.check_out) {
     // Firestore dates are 'yyyy-MM-dd'. Appending T00:00:00 treats them as local time at midnight.
-    const checkInDate = new Date(booking.checkInDate + "T00:00:00")
-    const checkOutDate = new Date(booking.checkOutDate + "T00:00:00")
+    const checkInDate = new Date(booking.check_in + "T00:00:00")
+    const checkOutDate = new Date(booking.check_out + "T00:00:00")
 
     // Access is valid from the start of check-in day through the end of check-out day.
     if (today < checkInDate || today > checkOutDate) {

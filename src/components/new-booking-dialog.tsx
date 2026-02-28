@@ -37,7 +37,7 @@ import { Input } from "./ui/input"
 const bookingFormSchema = z
   .object({
     guest_name: z.string().min(1, { message: "El nombre es requerido." }),
-    booking_id: z.string(),
+    booking_id: z.string(), // Represents booking_id_cloudbeds in the form
     roomId: z.string().min(1, { message: "La habitación es requerida." }),
     checkInDate: z
       .string()
@@ -51,7 +51,7 @@ const bookingFormSchema = z
         /^(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[0-2])\/\d{4}$/,
         "El formato de fecha debe ser dd/mm/aaaa."
       ),
-    status: z.enum(["Confirmed", "Checked-In", "Checked-Out", "Cancelled", "Bloqueada"]),
+    status: z.enum(["Confirmed", "Checked-In", "Checked-Out", "Cancelled", "Bloqueada", "checked_in"]),
   })
   .refine(
     (data) => {
@@ -73,7 +73,7 @@ const bookingFormSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["booking_id"],
-        message: "El ID de Cloudbeds es requerido.",
+        message: "El N° de Reserva es requerido.",
       });
     }
      if (data.status !== 'Bloqueada' && data.guest_name.length < 3) {
@@ -92,7 +92,7 @@ type NewBookingDialogProps = {
   onOpenChange: (open: boolean) => void
   onSave: (data: NewBookingData) => void
   rooms: Room[]
-  bookingToEdit?: (Booking & { room?: Room }) | null
+  bookingToEdit?: (Booking & { room?: Room | null }) | null
   defaultValues?: { roomId: string, checkInDate: string }
 }
 
@@ -122,19 +122,20 @@ export function NewBookingDialog({
   useEffect(() => {
     if (isOpen) {
       if (isEditing && bookingToEdit) {
+        const normalizedStatus = bookingToEdit.status === 'checked_in' ? 'Checked-In' : bookingToEdit.status;
         form.reset({
           guest_name: bookingToEdit.guest_name,
-          booking_id: bookingToEdit.booking_id,
+          booking_id: bookingToEdit.booking_id_cloudbeds,
           roomId: bookingToEdit.roomId,
           checkInDate: format(
-            parse(bookingToEdit.checkInDate, "yyyy-MM-dd", new Date()),
+            parse(bookingToEdit.check_in, "yyyy-MM-dd", new Date()),
             "dd/MM/yyyy"
           ),
           checkOutDate: format(
-            parse(bookingToEdit.checkOutDate, "yyyy-MM-dd", new Date()),
+            parse(bookingToEdit.check_out, "yyyy-MM-dd", new Date()),
             "dd/MM/yyyy"
           ),
-          status: bookingToEdit.status,
+          status: normalizedStatus as NewBookingData['status'],
         })
       } else {
         form.reset({
@@ -197,7 +198,7 @@ export function NewBookingDialog({
               name="booking_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Número de Reserva (Cloudbeds)</FormLabel>
+                  <FormLabel>N° de Reserva (Cloudbeds)</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="ID de la reserva en Cloudbeds"

@@ -25,7 +25,7 @@ import type { Booking, Room } from "@/lib/data"
 import { Switch } from "@/components/ui/switch"
 
 export type BookingWithDetails = Booking & {
-  room: Room
+  room: Room | null;
 }
 
 type GetColumnsProps = {
@@ -34,6 +34,11 @@ type GetColumnsProps = {
   onShowQr: (booking: BookingWithDetails) => void
   onEdit: (booking: BookingWithDetails) => void
   onDelete: (booking: BookingWithDetails) => void
+}
+
+const normalizeStatus = (status: Booking['status']) => {
+  if (status === 'checked_in') return 'Checked-In';
+  return status;
 }
 
 export const getColumns = ({
@@ -58,14 +63,14 @@ export const getColumns = ({
     },
   },
   {
-    accessorKey: "booking_id",
-    header: "ID Cloudbeds",
+    accessorKey: "booking_id_cloudbeds",
+    header: "N° de Reserva",
     cell: ({ row }) => {
-      const bookingId = row.original.booking_id
+      const bookingId = row.original.booking_id_cloudbeds
       return (
-        <div className="font-medium">
+        <div className="font-mono text-xs">
           {bookingId || (
-            <span className="text-muted-foreground">No disponible</span>
+            <span className="text-muted-foreground">N/A</span>
           )}
         </div>
       )
@@ -75,23 +80,25 @@ export const getColumns = ({
     accessorKey: "room",
     header: "Habitación",
     cell: ({ row }) => {
-      const room = row.original.room
+      const booking = row.original;
+      const roomName = booking.room?.name ?? booking.room_name;
+      const roomTypeName = booking.room?.type_name;
       return (
         <div>
-          <div className="font-semibold">{room.name}</div>
-          <div className="text-xs text-muted-foreground">{room.type_name}</div>
+          <div className="font-semibold">{roomName}</div>
+          {roomTypeName && <div className="text-xs text-muted-foreground">{roomTypeName}</div>}
         </div>
       )
     },
   },
   {
-    accessorKey: "checkInDate",
+    accessorKey: "check_in",
     header: "Fechas",
     cell: ({ row }) => {
       return (
         <div>
-          <div>{row.original.checkInDate}</div>
-          <div>{row.original.checkOutDate}</div>
+          <div>{row.original.check_in}</div>
+          <div>{row.original.check_out}</div>
         </div>
       )
     },
@@ -100,7 +107,7 @@ export const getColumns = ({
     accessorKey: "status",
     header: "Estado",
     cell: ({ row }) => {
-      const status = row.original.status
+      const status = normalizeStatus(row.original.status);
       const variant: "default" | "secondary" | "destructive" | "outline" =
         status === "Checked-In"
           ? "default"
@@ -122,6 +129,7 @@ export const getColumns = ({
       const handleAccessChange = (enabled: boolean) => {
         onAccessToggle(booking, enabled)
       }
+      const normalizedStatus = normalizeStatus(booking.status);
 
       return (
         <div className="flex items-center space-x-2">
@@ -129,7 +137,7 @@ export const getColumns = ({
             id={`access-switch-${booking.id}`}
             checked={booking.access_enabled}
             onCheckedChange={handleAccessChange}
-            disabled={!["Confirmed", "Checked-In"].includes(booking.status)}
+            disabled={!["Confirmed", "Checked-In"].includes(normalizedStatus)}
           />
         </div>
       )
@@ -139,6 +147,7 @@ export const getColumns = ({
     id: "actions",
     cell: ({ row }) => {
       const booking = row.original
+      const normalizedStatus = normalizeStatus(booking.status);
 
       return (
         <DropdownMenu>
@@ -154,13 +163,13 @@ export const getColumns = ({
               <Pencil className="mr-2 h-4 w-4" />
               Modificar
             </DropdownMenuItem>
-            {booking.status === "Confirmed" && (
+            {normalizedStatus === "Confirmed" && (
               <DropdownMenuItem onClick={() => onCheckIn(booking)}>
                 <Check className="mr-2 h-4 w-4" />
                 Registrar Entrada
               </DropdownMenuItem>
             )}
-            {booking.status === "Checked-In" && (
+            {normalizedStatus === "Checked-In" && (
               <>
                 <DropdownMenuItem onClick={() => onShowQr(booking)}>
                   <QrCode className="mr-2 h-4 w-4" />

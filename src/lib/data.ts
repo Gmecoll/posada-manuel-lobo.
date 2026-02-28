@@ -8,6 +8,7 @@ export type Room = {
   codes_pool?: string[];
   backup_code?: string;
   last_rotation?: any;
+  room_id_cloudbeds?: string;
 };
 
 export type Guest = {
@@ -19,17 +20,18 @@ export type Guest = {
 export type Booking = {
   id: string;
   guest_name: string;
-  booking_id: string;
-  roomId: string;
-  room_number: string;
-  checkInDate: string;
-  checkOutDate: string;
-  status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled' | 'Bloqueada';
+  booking_id_cloudbeds: string;
+  room_id_cloudbeds: string;
+  roomId: string; // This is the firestore doc id, populated client-side
+  room_name: string;
+  check_in: string;
+  check_out: string;
+  status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled' | 'Bloqueada' | 'checked_in';
   access_enabled: boolean;
-  documentStatus?: 'pending' | 'approved' | 'manual_review' | 'not_uploaded';
-  documentUrl?: string;
-  ocrText?: string;
-  verifiedAt?: any;
+  document_status?: 'pending' | 'approved' | 'manual_review' | 'not_uploaded' | 'pending_review';
+  document_url?: string;
+  ocr_text?: string;
+  document_validated_at?: any;
   comments?: string;
 };
 
@@ -95,57 +97,62 @@ export const bookings: Booking[] = [
   {
     id: 'booking-1',
     guest_name: 'John Doe',
-    booking_id: 'cb12345',
+    booking_id_cloudbeds: 'cb12345',
     roomId: 'room-1',
-    room_number: '1',
-    checkInDate: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0],
-    checkOutDate: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString().split('T')[0],
+    room_name: '1',
+    check_in: new Date(new Date().setDate(new Date().getDate() - 1)).toISOString().split('T')[0],
+    check_out: new Date(new Date().setDate(new Date().getDate() + 2)).toISOString().split('T')[0],
     status: 'Checked-In',
     access_enabled: true,
+    room_id_cloudbeds: 'cloudbeds-room-1',
   },
   {
     id: 'booking-3',
     guest_name: 'Peter Jones',
-    booking_id: 'cb12347',
+    booking_id_cloudbeds: 'cb12347',
     roomId: 'room-8',
-    room_number: '8',
-    checkInDate: new Date().toISOString().split('T')[0],
-    checkOutDate: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
+    room_name: '8',
+    check_in: new Date().toISOString().split('T')[0],
+    check_out: new Date(new Date().setDate(new Date().getDate() + 5)).toISOString().split('T')[0],
     status: 'Confirmed',
     access_enabled: true,
+    room_id_cloudbeds: 'cloudbeds-room-8',
   },
   {
     id: 'booking-4',
     guest_name: 'Mary Williams',
-    booking_id: 'cb12348',
+    booking_id_cloudbeds: 'cb12348',
     roomId: 'room-5',
-    room_number: '5',
-    checkInDate: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
-    checkOutDate: new Date(new Date().setDate(new Date().getDate() + 4)).toISOString().split('T')[0],
+    room_name: '5',
+    check_in: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString().split('T')[0],
+    check_out: new Date(new Date().setDate(new Date().getDate() + 4)).toISOString().split('T')[0],
     status: 'Confirmed',
     access_enabled: false,
+    room_id_cloudbeds: 'cloudbeds-room-5',
   },
   {
     id: 'booking-5',
     guest_name: 'Chris Brown',
-    booking_id: 'cb12349',
+    booking_id_cloudbeds: 'cb12349',
     roomId: 'room-1',
-    room_number: '1',
-    checkInDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
-    checkOutDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0],
+    room_name: '1',
+    check_in: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
+    check_out: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().split('T')[0],
     status: 'Checked-Out',
     access_enabled: false,
+    room_id_cloudbeds: 'cloudbeds-room-1',
   },
   {
     id: 'booking-6',
     guest_name: 'Patricia Green',
-    booking_id: 'cb12350',
+    booking_id_cloudbeds: 'cb12350',
     roomId: 'room-4',
-    room_number: '4',
-    checkInDate: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
-    checkOutDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
+    room_name: '4',
+    check_in: new Date(new Date().setDate(new Date().getDate() - 7)).toISOString().split('T')[0],
+    check_out: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().split('T')[0],
     status: 'Cancelled',
     access_enabled: false,
+    room_id_cloudbeds: 'cloudbeds-room-4',
   },
 ];
 

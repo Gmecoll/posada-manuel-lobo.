@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -47,8 +48,8 @@ type BookingWithDoc = {
   id: string;
   guest_name?: string;
   document_url?: string;
-  document_status?: string;
-  room_number?: string;
+  document_status?: 'pending' | 'approved' | 'manual_review' | 'not_uploaded' | 'pending_review';
+  room_name?: string;
   ocr_text?: string;
   document_validated_at?: Timestamp;
   comments?: string;
@@ -244,7 +245,7 @@ export const AdminDocumentPanel: React.FC = () => {
                             {b.guest_name || 'Huésped'}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Hab: {b.room_number}
+                            Hab: {b.room_name}
                           </p>
                         </div>
                       </div>
@@ -346,7 +347,7 @@ export const AdminDocumentPanel: React.FC = () => {
                           <div>
                             <p className="text-sm font-bold">{b.guest_name}</p>
                             <p className="text-[10px] text-muted-foreground">
-                              Hab: {b.room_number}
+                              Hab: {b.room_name}
                             </p>
                           </div>
                         </div>

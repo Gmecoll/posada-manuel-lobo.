@@ -417,48 +417,63 @@ exports.testSincronizarCloudbeds = onRequest({
 // --- FUNCIÓN 9: TEST RACK (Acceso por Link) ---
 // ==========================================
 exports.testsincronizarReservasRack = onRequest({
-    region: "us-central1"
+    region: "us-central1",
+    timeoutSeconds: 300 
 }, async (req, res) => {
     try {
         const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
         const accessToken = cbAuthDoc.data().access_token.trim();
-
         const hoy = new Date().toISOString().split('T')[0];
 
-        const response = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservations", {
+        // 1. Lista de reservas
+        const listResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservations", {
             params: { checkOutFrom: hoy },
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
-        const reservas = response.data.data;
+        const reservasCortas = listResponse.data.data;
         const batch = db.batch();
-        let count = 0;
+        let procesadas = 0;
 
-        reservas.forEach((reserva) => {
-            const bookingId = `booking-${reserva.reservationID}`;
-            const bookingRef = db.collection("bookings").doc(bookingId);
+        // 2. Proceso de detalle para capturar el array 'assigned'
+        for (const resBasica of reservasCortas) {
+            const detalleResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservation", {
+                params: { reservationID: resBasica.reservationID },
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
 
-            // PULIDO 1: Captura de nombre más flexible
-            const nombreCompleto = reserva.guestName || 
-                                   `${reserva.guestFirstName || ''} ${reserva.guestLastName || ''}`.trim() || 
-                                   "Huésped sin nombre";
+            const d = detalleResponse.data.data;
+            const bookingRef = db.collection("bookings").doc(`booking-${d.reservationID}`);
+
+            // MAPEO EXACTO SEGÚN TU JSON:
+            // Buscamos la unidad en el array 'assigned'
+            const asignacion = (d.assigned && d.assigned.length > 0) ? d.assigned[0] : null;
 
             batch.set(bookingRef, {
-                booking_id_cloudbeds: reserva.reservationID,
-                guest_name: nombreCompleto,
-                check_in: reserva.startDate,
-                check_out: reserva.endDate,
-                status: reserva.status,
-                // PULIDO 2: Asegurar la vinculación con la habitación física
-                room_id_cloudbeds: reserva.roomID || null,
-                room_name: reserva.roomName || "No asignada",
+                booking_id_cloudbeds: d.reservationID,
+                guest_name: d.guestName || "Huésped",
+                check_in: d.startDate,
+                check_out: d.endDate,
+                status: d.status,
+                // El 'ID de Oro' que acabamos de encontrar:
+                room_id_cloudbeds: asignacion ? asignacion.roomID : null,
+                room_name: asignacion ? asignacion.roomName : "No asignada",
                 last_sync: admin.firestore.FieldValue.serverTimestamp()
             }, { merge: true });
-            count++;
-        });
+
+            procesadas++;
+            await new Promise(resolve => setTimeout(resolve, 50)); // Rapidez con seguridad
+        }
 
         await batch.commit();
-        return res.status(200).send(`¡Rack Pulido! Se actualizaron ${count} reservas con nombres corregidos.`);
+
+        return res.status(200).send(`
+            <div style="font-family: sans-serif; text-align: center; padding: 50px;">
+                <h1 style="color: #2196F3;">¡Misión Cumplida!</h1>
+                <p>Se han procesado <b>${procesadas}</b> reservas con sus habitaciones reales.</p>
+                <p>Iron Man ahora está oficialmente en la <b>sh(1)</b> dentro de Firestore.</p>
+            </div>
+        `);
 
     } catch (error) {
         return res.status(500).json({ error: error.message });
