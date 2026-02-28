@@ -479,3 +479,51 @@ exports.testsincronizarReservasRack = onRequest({
         return res.status(500).json({ error: error.message });
     }
 });
+// --- WEBHOOK: Actualización Automática de Reservas ---
+exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res) => {
+    try {
+        // 1. Extraer ID sin importar si viene como ID o Id
+        const reservationID = req.body.reservationID || req.body.reservationId;
+        
+        if (!reservationID) {
+            console.log("Webhook recibido sin ID válido");
+            return res.status(200).send("No ID");
+        }
+
+        // 2. Obtener credenciales
+        const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
+        const accessToken = cbAuthDoc.data().access_token.trim();
+
+        // 3. CONSULTA PROFUNDA: No confiamos en el body del webhook, 
+        // le pedimos a Cloudbeds el detalle oficial de la reserva.
+        const detalleResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservation", {
+            params: { reservationID },
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        const d = detalleResponse.data.data;
+        
+        // 4. Mapear habitación (usando el array 'assigned' que vimos que funciona)
+        const asignacion = (d.assigned && d.assigned.length > 0) ? d.assigned[0] : null;
+
+        // 5. Guardar en Firestore con nombres limpios
+        await db.collection("bookings").doc(`booking-${reservationID}`).set({
+            booking_id_cloudbeds: reservationID,
+            // Usamos d.guestFirstName y d.guestLastName del detalle oficial
+            guest_name: `${d.guestFirstName || ""} ${d.guestLastName || ""}`.trim() || "Huésped",
+            check_in: d.startDate,
+            check_out: d.endDate,
+            status: d.status,
+            room_id_cloudbeds: asignacion ? asignacion.roomID : null,
+            room_name: asignacion ? asignacion.roomName : "No asignada",
+            last_sync: admin.firestore.FieldValue.serverTimestamp()
+        }, { merge: true });
+
+        console.log(`✅ Webhook: Reserva ${reservationID} (Jose Mendez) actualizada con éxito.`);
+        return res.status(200).send("OK");
+
+    } catch (error) {
+        console.error("❌ Error Webhook:", error.message);
+        return res.status(200).send("Error procesado");
+    }
+});

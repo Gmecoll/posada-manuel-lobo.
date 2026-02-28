@@ -9,6 +9,7 @@ import {
   DoorOpen,
   Trash2,
   Pencil,
+  ArrowUpDown,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -25,7 +26,7 @@ import type { Booking, Room } from "@/lib/data"
 import { Switch } from "@/components/ui/switch"
 
 export type BookingWithDetails = Booking & {
-  room: Room | null;
+  room: Room | null
 }
 
 type GetColumnsProps = {
@@ -36,9 +37,9 @@ type GetColumnsProps = {
   onDelete: (booking: BookingWithDetails) => void
 }
 
-const normalizeStatus = (status: Booking['status']) => {
-  if (status === 'checked_in') return 'Checked-In';
-  return status;
+const normalizeStatus = (status: Booking["status"]) => {
+  if (status === "checked_in") return "Checked-In"
+  return status
 }
 
 export const getColumns = ({
@@ -50,7 +51,17 @@ export const getColumns = ({
 }: GetColumnsProps): ColumnDef<BookingWithDetails>[] => [
   {
     accessorKey: "guest_name",
-    header: "Huésped",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Huésped
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
     cell: ({ row }) => {
       const guestName = row.original.guest_name
       return (
@@ -64,36 +75,73 @@ export const getColumns = ({
   },
   {
     accessorKey: "booking_id_cloudbeds",
-    header: "N° de Reserva",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          N° de Reserva
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
     cell: ({ row }) => {
       const bookingId = row.original.booking_id_cloudbeds
       return (
         <div className="font-mono text-xs">
-          {bookingId || (
-            <span className="text-muted-foreground">N/A</span>
-          )}
+          {bookingId || <span className="text-muted-foreground">N/A</span>}
         </div>
       )
     },
   },
   {
     accessorKey: "room",
-    header: "Habitación",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Habitación
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
     cell: ({ row }) => {
-      const booking = row.original;
-      const roomName = booking.room?.name ?? booking.room_name;
-      const roomTypeName = booking.room?.type_name;
+      const booking = row.original
+      const roomName = booking.room?.name ?? booking.room_name
+      const roomTypeName = booking.room?.type_name
       return (
         <div>
           <div className="font-semibold">{roomName}</div>
-          {roomTypeName && <div className="text-xs text-muted-foreground">{roomTypeName}</div>}
+          {roomTypeName && (
+            <div className="text-xs text-muted-foreground">
+              {roomTypeName}
+            </div>
+          )}
         </div>
       )
+    },
+    sortingFn: (rowA, rowB) => {
+      const roomNameA = rowA.original.room?.name ?? rowA.original.room_name ?? ""
+      const roomNameB = rowB.original.room?.name ?? rowB.original.room_name ?? ""
+      return roomNameA.localeCompare(roomNameB)
     },
   },
   {
     accessorKey: "check_in",
-    header: "Fechas",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Fechas
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
     cell: ({ row }) => {
       return (
         <div>
@@ -105,9 +153,19 @@ export const getColumns = ({
   },
   {
     accessorKey: "status",
-    header: "Estado",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Estado
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
     cell: ({ row }) => {
-      const status = normalizeStatus(row.original.status);
+      const status = normalizeStatus(row.original.status)
       const variant: "default" | "secondary" | "destructive" | "outline" =
         status === "Checked-In"
           ? "default"
@@ -129,7 +187,7 @@ export const getColumns = ({
       const handleAccessChange = (enabled: boolean) => {
         onAccessToggle(booking, enabled)
       }
-      const normalizedStatus = normalizeStatus(booking.status);
+      const normalizedStatus = normalizeStatus(booking.status)
 
       return (
         <div className="flex items-center space-x-2">
@@ -147,7 +205,7 @@ export const getColumns = ({
     id: "actions",
     cell: ({ row }) => {
       const booking = row.original
-      const normalizedStatus = normalizeStatus(booking.status);
+      const normalizedStatus = normalizeStatus(booking.status)
 
       return (
         <DropdownMenu>
