@@ -28,6 +28,11 @@ import {
 } from "./ui/card"
 import { Skeleton } from "./ui/skeleton"
 
+const getRoomNumber = (name: string) => {
+  if (!name) return 0;
+  const match = name.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+};
 
 export function BookingRack() {
   const [rooms, setRooms] = useState<Room[]>([])
@@ -54,8 +59,7 @@ export function BookingRack() {
             ...doc.data(),
           }))
           .sort(
-            (a, b) =>
-              parseInt(a.room_number ?? "0") - parseInt(b.room_number ?? "0")
+            (a, b) => getRoomNumber(a.name) - getRoomNumber(b.name)
           ) as Room[]
         setRooms(roomsFromDb)
         if (snapshot.size > 0) setIsLoading(false)
@@ -155,7 +159,7 @@ export function BookingRack() {
     try {
       const matchedRoom = rooms.find((r) => r.id === bookingData.roomId)
 
-      if (!matchedRoom?.room_number) {
+      if (!matchedRoom?.name) {
         toast({
           variant: "destructive",
           title: "Error de Habitación",
@@ -171,7 +175,7 @@ export function BookingRack() {
         guest_name: bookingData.guest_name,
         booking_id: bookingData.status === 'Bloqueada' ? `block-${new Date().getTime()}` : bookingData.booking_id,
         roomId: bookingData.roomId,
-        room_number: matchedRoom.room_number,
+        room_number: matchedRoom.name,
         checkInDate: format(checkIn, "yyyy-MM-dd"),
         checkOutDate: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,
@@ -256,8 +260,8 @@ export function BookingRack() {
                 <React.Fragment key={room.id}>
                   {/* Room Label */}
                   <div className="sticky left-0 z-20 flex flex-col items-start justify-center p-2 bg-card border-b border-r">
-                    <div className="font-semibold">{room.room_number}</div>
-                    <div className="text-xs text-muted-foreground">{room.type}</div>
+                    <div className="font-semibold">{room.name}</div>
+                    <div className="text-xs text-muted-foreground">{room.type_name}</div>
                   </div>
 
                   {/* Day Cells for the room */}

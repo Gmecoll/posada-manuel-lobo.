@@ -2,8 +2,8 @@
 export type Room = {
   id: string;
   lockId?: string;
-  room_number: string;
-  type: 'Standard' | 'Deluxe' | 'Suite';
+  name: string;
+  type_name: string;
   status: 'Disponible' | 'Ocupada' | 'Limpieza';
   codes_pool?: string[];
   backup_code?: string;
@@ -67,14 +67,13 @@ export const guests: Guest[] = [
 ];
 
 // This is now just initial data for populating firestore. The app will read from Firestore.
-export const rooms: Room[] = [
-  { id: 'room-1', room_number: '1', type: 'Standard', status: 'Ocupada', lockId: "Sin Definir" },
-  { id: 'room-2', room_number: '2', type: 'Deluxe', status: 'Ocupada', lockId: "Sin Definir" },
-  { id: 'room-3', room_number: '3', type: 'Suite', status: 'Limpieza', lockId: "Sin Definir" },
+export const rooms: Omit<Room, 'id'>[] = [
+  { name: '1', type_name: 'Standard', status: 'Ocupada', lockId: "Sin Definir" },
+  { name: '2', type_name: 'Deluxe', status: 'Ocupada', lockId: "Sin Definir" },
+  { name: '3', type_name: 'Suite', status: 'Limpieza', lockId: "Sin Definir" },
   { 
-    id: 'room-4', 
-    room_number: '4', 
-    type: 'Standard', 
+    name: '4', 
+    type_name: 'Standard', 
     status: 'Disponible',
     lockId: '29074468',
     codes_pool: [
@@ -83,13 +82,14 @@ export const rooms: Room[] = [
     ],
     backup_code: '111111'
   },
-  { id: 'room-5', room_number: '5', type: 'Deluxe', status: 'Ocupada', lockId: "Sin Definir" },
-  { id: 'room-6', room_number: '6', type: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
-  { id: 'room-7', room_number: '7', type: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
-  { id: 'room-8', room_number: '8', type: 'Suite', status: 'Ocupada', lockId: "Sin Definir" },
-  { id: 'room-9', room_number: '9', type: 'Deluxe', status: 'Limpieza', lockId: "Sin Definir" },
-  { id: 'room-10', room_number: '10', type: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
-];
+  { name: '5', type_name: 'Deluxe', status: 'Ocupada', lockId: "Sin Definir" },
+  { name: '6', type_name: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
+  { name: '7', type_name: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
+  { name: '8', type_name: 'Suite', status: 'Ocupada', lockId: "Sin Definir" },
+  { name: '9', type_name: 'Deluxe', status: 'Limpieza', lockId: "Sin Definir" },
+  { name: '10', type_name: 'Standard', status: 'Disponible', lockId: "Sin Definir" },
+].map((room, index) => ({ ...room, id: `room-${index + 1}` }));
+
 
 export const bookings: Booking[] = [
   {

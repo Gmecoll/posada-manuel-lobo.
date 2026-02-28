@@ -226,7 +226,7 @@ export function NewBookingDialog({
                        {/* Show all rooms if editing, otherwise only available */}
                       {(isEditing ? rooms : availableRooms).map((room) => (
                         <SelectItem key={room.id} value={room.id}>
-                          Habitación {room.room_number} ({room.type})
+                          Habitación {room.name} ({room.type_name})
                         </SelectItem>
                       ))}
                     </SelectContent>

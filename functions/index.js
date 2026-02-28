@@ -17,7 +17,8 @@ const db = admin.firestore();
 // 3. CONFIGURACIONES Y SECRETOS
 const ADMIN_EMAIL = "gmecollg@gmail.com";
 const MERCADO_PAGO_ACCESS_TOKEN = defineSecret('MERCADO_PAGO_ACCESS_TOKEN');
-const ANAM_API_KEY = defineSecret("ANAM_API_KEY"); 
+const CLOUDBEDS_CLIENT_ID = defineSecret("CLOUDBEDS_CLIENT_ID");
+const CLOUDBEDS_CLIENT_SECRET = defineSecret("CLOUDBEDS_CLIENT_SECRET");
 
 // ==========================================
 // --- FUNCIÓN 1: INICIAR PAGO SERVICIO (MERCADO PAGO) ---
@@ -26,25 +27,17 @@ exports.iniciarPagoServicio = onCall({
     region: "us-central1", 
     secrets: [MERCADO_PAGO_ACCESS_TOKEN] 
 }, async (request) => {
-    // AÑADIDO: extraemos externalReference y los comments
     const { serviceId, quantity, userId, guestName, roomNumber, reservationDate, reservationTime, comments, externalReference } = request.data;
 
     try {
-        if (!serviceId || !userId) {
-            throw new HttpsError('invalid-argument', 'Faltan datos del servicio o usuario.');
-        }
+        if (!serviceId || !userId) throw new HttpsError('invalid-argument', 'Faltan datos.');
 
         const serviceDoc = await db.collection('services').doc(serviceId).get();
-        if (!serviceDoc.exists) {
-            throw new HttpsError('not-found', 'El servicio solicitado no existe.');
-        }
+        if (!serviceDoc.exists) throw new HttpsError('not-found', 'El servicio no existe.');
         const serviceData = serviceDoc.data();
 
-        // SDK V2 Mercado Pago
         const { MercadoPagoConfig, Preference } = require('mercadopago');
-        const client = new MercadoPagoConfig({ 
-            accessToken: MERCADO_PAGO_ACCESS_TOKEN.value() 
-        });
+        const client = new MercadoPagoConfig({ accessToken: MERCADO_PAGO_ACCESS_TOKEN.value() });
         const preference = new Preference(client);
 
         const result = await preference.create({
@@ -65,31 +58,44 @@ exports.iniciarPagoServicio = onCall({
             }
         });
 
-     
-
-        // 1. CORRECCIÓN: Guardamos en solicitudes_servicios para la Campana de Notificaciones
+        const cleanRoomNumber = roomNumber ? String(roomNumber).replace('room-', '') : "N/A";
         const requestId = externalReference || `solicitud-${Date.now()}`;
         
-      // Limpiamos la variable para quitarle la palabra "room-" si la trae
-      const cleanRoomNumber = roomNumber ? String(roomNumber).replace('room-', '') : "N/A";
+        await db.collection('solicitudes_servicios').doc(requestId).set({
+            cantidad: Number(quantity),
+            currency: 'UYU',
+            estado_pago: 'pendiente',
+            external_reference: requestId,
+            fecha: admin.firestore.FieldValue.serverTimestamp(),
+            guestName: guestName || "Huésped",
+            leido: false,
+            monto: Number(serviceData.price) * Number(quantity),
+            nombreServicio: serviceData.title,
+            roomNumber: cleanRoomNumber,
+            servicioId: serviceId,
+            usuarioId: userId,
+            reservationDate: reservationDate || null,
+            reservationTime: reservationTime || null,
+            comentarios: comments || "",
+            preferenceId: result.id
+        });
 
-      await db.collection('solicitudes_servicios').doc(requestId).set({
-          cantidad: Number(quantity),
-          currency: 'UYU',
-          estado_pago: 'pendiente',
-          external_reference: requestId,
-          fecha: admin.firestore.FieldValue.serverTimestamp(), // Timestamp seguro
-          guestName: guestName,
-          leido: false,
-          monto: Number(serviceData.price) * Number(quantity),
-          nombreServicio: serviceData.title,
-          roomNumber: cleanRoomNumber, // <--- Aquí usamos el número limpio
-          servicioId: serviceId,
-          usuarioId: userId,
-          reservationDate: reservationDate || null,
-          reservationTime: reservationTime || null,
-          comentarios: comments || ""
-      });
+        try {
+            const webhookUrl = "https://hook.us2.make.com/8v6qga9kx9sm3ef488yl664aw8uceeub";
+            await axios.post(webhookUrl, {
+                servicio: serviceData.title,
+                cantidad: Number(quantity),
+                huesped: guestName || "Huésped",
+                habitacion: cleanRoomNumber,
+                fecha_reserva: reservationDate || "Sin fecha",
+                hora_reserva: reservationTime || "Sin hora",
+                comentarios: comments || "Sin comentarios",
+                total: Number(serviceData.price) * Number(quantity)
+            });
+            console.log("✅ Webhook disparado a Make.com con éxito");
+        } catch (webhookError) {
+            console.error("❌ Error enviando webhook a Make.com:", webhookError.message);
+        }
 
         return { id: result.id, init_point: result.init_point };
 
@@ -335,48 +341,126 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         });
     } catch (e) { console.error("OCR Error:", e); }
     return null;
+    
 });
 
 // ==========================================
-// --- FUNCIÓN 8: SKY ROOMS AI (ANAM TOKEN) ---
+// --- FUNCIÓN 8: Cloudbeds ---
 // ==========================================
-const ANAM_PERSONA_ID = "89760c52-643c-4465-89cc-3d708e11ae36";
-exports.anamToken = onRequest(
-  { 
-    region: "us-central1",
-    cors: true, 
-    secrets: [ANAM_API_KEY] 
-  }, 
-  async (request, response) => {
+
+exports.testSincronizarCloudbeds = onRequest({
+    region: "us-central1"
+}, async (req, res) => {
     try {
-      const apiKey = ANAM_API_KEY.value(); 
+        const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
+        const accessToken = cbAuthDoc.data().access_token.trim();
 
-      const apiResponse = await fetch("https://api.anam.ai/v1/auth/session-token", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`, 
-        },
-        body: JSON.stringify({
-            personaConfig: {
-                personaId: ANAM_PERSONA_ID
+        const response = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getRooms", {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        const dataRecibida = response.data.data;
+        const batch = db.batch();
+        let count = 0;
+
+        // 1. Recorremos el array de propiedades (que en tu caso tiene la propiedad 320242)
+        dataRecibida.forEach((propiedad) => {
+            // 2. Entramos al array de 'rooms' de esa propiedad
+            if (propiedad.rooms && Array.isArray(propiedad.rooms)) {
+                propiedad.rooms.forEach((room) => {
+                    
+                    const roomId = `room-${room.roomID}`;
+                    const roomRef = db.collection("rooms").doc(roomId);
+                    
+                    // Buscamos el ID de Doorlock si existe
+                    const lockField = room.customFields?.find(f => 
+                        f.customFieldName.toLowerCase().includes('doorlock')
+                    );
+
+                    batch.set(roomRef, {
+                        room_id_cloudbeds: room.roomID,
+                        name: room.roomName || `Hab-${room.roomID}`,
+                        type_name: room.roomTypeName || "Sin Tipo",
+                        room_type_id: room.roomTypeID,
+                        // Si llenaste el ID de TTLock en Cloudbeds, aquí se guarda
+                        lockId: lockField ? lockField.customFieldValue : null,
+                        last_sync: admin.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    
+                    count++;
+                });
             }
-        }),
-      });
+        });
 
-      const data = await apiResponse.json();
-      
-      if (!apiResponse.ok) {
-          console.error("Error respuesta Anam:", data);
-          response.status(apiResponse.status).json(data);
-          return;
-      }
-
-      response.json(data);
+        if (count > 0) {
+            await batch.commit();
+            return res.status(200).send(`
+                <div style="font-family: sans-serif; text-align: center; padding: 50px;">
+                    <h1 style="color: #4CAF50;">¡Sincronización Exitosa!</h1>
+                    <p style="font-size: 1.2em;">Se han guardado <b>${count}</b> habitaciones reales en Firestore.</p>
+                    <p>Ya puedes ver <b>es(1), es(2), do(1)...</b> en tu colección 'rooms'.</p>
+                </div>
+            `);
+        } else {
+            return res.status(200).json({ mensaje: "No se encontraron habitaciones en la estructura.", data: dataRecibida });
+        }
 
     } catch (error) {
-      logger.error("Error obteniendo token:", error);
-      response.status(500).send("Error interno");
+        return res.status(500).json({ error: error.message });
     }
-  }
-);
+});
+
+// ==========================================
+// --- FUNCIÓN 9: SINCRONIZAR RACK DE RESERVAS (30 DÍAS) ---
+// ==========================================
+// ==========================================
+// --- FUNCIÓN 9: TEST RACK (Acceso por Link) ---
+// ==========================================
+exports.testsincronizarReservasRack = onRequest({
+    region: "us-central1"
+}, async (req, res) => {
+    try {
+        const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
+        const accessToken = cbAuthDoc.data().access_token.trim();
+
+        const hoy = new Date().toISOString().split('T')[0];
+
+        const response = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservations", {
+            params: { checkOutFrom: hoy },
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        const reservas = response.data.data;
+        const batch = db.batch();
+        let count = 0;
+
+        reservas.forEach((reserva) => {
+            const bookingId = `booking-${reserva.reservationID}`;
+            const bookingRef = db.collection("bookings").doc(bookingId);
+
+            // PULIDO 1: Captura de nombre más flexible
+            const nombreCompleto = reserva.guestName || 
+                                   `${reserva.guestFirstName || ''} ${reserva.guestLastName || ''}`.trim() || 
+                                   "Huésped sin nombre";
+
+            batch.set(bookingRef, {
+                booking_id_cloudbeds: reserva.reservationID,
+                guest_name: nombreCompleto,
+                check_in: reserva.startDate,
+                check_out: reserva.endDate,
+                status: reserva.status,
+                // PULIDO 2: Asegurar la vinculación con la habitación física
+                room_id_cloudbeds: reserva.roomID || null,
+                room_name: reserva.roomName || "No asignada",
+                last_sync: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+            count++;
+        });
+
+        await batch.commit();
+        return res.status(200).send(`¡Rack Pulido! Se actualizaron ${count} reservas con nombres corregidos.`);
+
+    } catch (error) {
+        return res.status(500).json({ error: error.message });
+    }
+});

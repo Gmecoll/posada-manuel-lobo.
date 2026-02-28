@@ -78,8 +78,8 @@ export const getColumns = ({
       const room = row.original.room
       return (
         <div>
-          <div className="font-semibold">{room.room_number}</div>
-          <div className="text-xs text-muted-foreground">{room.type}</div>
+          <div className="font-semibold">{room.name}</div>
+          <div className="text-xs text-muted-foreground">{room.type_name}</div>
         </div>
       )
     },

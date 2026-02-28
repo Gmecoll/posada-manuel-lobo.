@@ -148,7 +148,7 @@ export default function BookingsPage() {
         await updateDoc(roomRef, { status: "Ocupada" })
         toast({
           title: "Check-in Exitoso",
-          description: `Check-in para reserva ${booking.booking_id} en Habitación ${booking.room.room_number}.`,
+          description: `Check-in para reserva ${booking.booking_id} en Habitación ${booking.room.name}.`,
         })
       } catch (error) {
         console.error("Error during check-in:", error)
@@ -200,7 +200,7 @@ export default function BookingsPage() {
     try {
       const matchedRoom = rooms.find((r) => r.id === bookingData.roomId)
 
-      if (!matchedRoom || !matchedRoom.room_number) {
+      if (!matchedRoom || !matchedRoom.name) {
         toast({
           variant: "destructive",
           title: "Error de Habitación",
@@ -225,7 +225,7 @@ export default function BookingsPage() {
         guest_name: bookingData.guest_name,
         booking_id: bookingData.booking_id,
         roomId: bookingData.roomId,
-        room_number: matchedRoom.room_number,
+        room_number: matchedRoom.name,
         checkInDate: format(checkIn, "yyyy-MM-dd"),
         checkOutDate: format(checkOut, "yyyy-MM-dd"),
         status: bookingData.status,

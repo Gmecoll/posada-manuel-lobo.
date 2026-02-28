@@ -41,6 +41,13 @@ const statusColors: Record<string, string> = {
     "bg-yellow-100 text-yellow-800 border-yellow-200 hover:bg-yellow-100",
 }
 
+const getRoomNumber = (name: string) => {
+  if (!name) return 0;
+  const match = name.match(/\d+/);
+  return match ? parseInt(match[0], 10) : 0;
+};
+
+
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([])
   const { toast } = useToast()
@@ -58,7 +65,7 @@ export default function RoomsPage() {
           // Ensure data is sorted by room number (as numbers)
           .sort(
             (a, b) =>
-              parseInt(a.room_number ?? "0") - parseInt(b.room_number ?? "0")
+              getRoomNumber(a.name) - getRoomNumber(b.name)
           ) as Room[]
         setRooms(roomsFromDb)
       },
@@ -76,8 +83,8 @@ export default function RoomsPage() {
     initialRooms.forEach((room) => {
       const docRef = doc(db, "rooms", room.id)
       batch.set(docRef, {
-        room_number: room.room_number,
-        type: room.type,
+        name: room.name,
+        type_name: room.type_name,
         status: room.status,
         codes_pool: room.codes_pool || null,
         backup_code: room.backup_code || null,
@@ -162,8 +169,8 @@ export default function RoomsPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle>Habitación {room.room_number}</CardTitle>
-                    <CardDescription>{room.type}</CardDescription>
+                    <CardTitle>Habitación {room.name}</CardTitle>
+                    <CardDescription>{room.type_name}</CardDescription>
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

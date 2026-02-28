@@ -118,7 +118,7 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
       </div>
       <div className="w-full max-w-md text-center">
         <h1 className="font-headline text-3xl md:text-4xl">
-          Habitación <span className="text-primary">{room.room_number}</span>
+          Habitación <span className="text-primary">{room.name}</span>
         </h1>
         <p className="mt-2 text-muted-foreground">
           {finalAccessDenied
