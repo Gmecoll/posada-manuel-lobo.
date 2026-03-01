@@ -36,17 +36,37 @@ exports.mantenimientoHabitaciones = onSchedule({
     hoy.setHours(0, 0, 0, 0); 
     const [roomsSnap, bookingsSnap] = await Promise.all([
       db.collection("rooms").get(),
-      db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada", "Confirmed"]).get(),
+      // Solo las reservas activas ('Checked-In') o bloqueos deben marcar una habitación como ocupada
+      db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada"]).get(),
     ]);
 
     if (roomsSnap.empty) return null;
 
-    const occupiedRooms = new Set();
+    // Crear un mapa para asociar room_id_cloudbeds con el ID de documento de Firestore
+    const roomsByCloudbedsId = new Map();
+    roomsSnap.forEach(doc => {
+      const roomData = doc.data();
+      if (roomData.room_id_cloudbeds) {
+        roomsByCloudbedsId.set(roomData.room_id_cloudbeds, doc.id);
+      }
+    });
+
+    const occupiedRoomIds = new Set();
+    const bookingForRoom = new Map(); // Guardar la reserva que ocupa la habitación para el log
+
     bookingsSnap.forEach((doc) => {
       const booking = doc.data();
-      const fechaIn = new Date(booking.checkInDate + "T00:00:00");
-      const fechaOut = new Date(booking.checkOutDate + "T00:00:00");
-      if (hoy >= fechaIn && hoy < fechaOut) occupiedRooms.add(booking.roomId);
+      const fechaIn = new Date(booking.check_in + "T00:00:00");
+      const fechaOut = new Date(booking.check_out + "T00:00:00");
+
+      // Comprobar si la reserva está activa hoy
+      if (hoy >= fechaIn && hoy < fechaOut) {
+        const firestoreRoomId = roomsByCloudbedsId.get(booking.room_id_cloudbeds);
+        if (firestoreRoomId) {
+          occupiedRoomIds.add(firestoreRoomId);
+          bookingForRoom.set(firestoreRoomId, booking);
+        }
+      }
     });
 
     const batch = db.batch();
@@ -56,10 +76,33 @@ exports.mantenimientoHabitaciones = onSchedule({
       const roomRef = roomDoc.ref;
       const roomData = roomDoc.data();
       const updatePayload = {};
-      const newStatus = occupiedRooms.has(roomDoc.id) ? "Ocupada" : "Disponible";
+      
+      const isOccupied = occupiedRoomIds.has(roomDoc.id);
+      const newStatus = isOccupied ? "Ocupada" : "Disponible";
 
-      if (roomData.status !== newStatus && roomData.status !== "Limpieza") updatePayload.status = newStatus;
+      // Actualizar solo si el estado ha cambiado y no está en limpieza manual
+      if (roomData.status !== newStatus && roomData.status !== "Limpieza") {
+        updatePayload.status = newStatus;
 
+        // Crear registro de actividad para el cambio de estado
+        let description;
+        if (newStatus === 'Ocupada') {
+          const booking = bookingForRoom.get(roomDoc.id);
+          description = `Habitación ${roomData.name || roomDoc.id} ocupada por ${booking?.guest_name || 'Huésped'}.`;
+        } else {
+          description = `Habitación ${roomData.name || roomDoc.id} ha quedado disponible.`;
+        }
+        
+        const logRef = db.collection('activity_logs').doc();
+        batch.set(logRef, {
+          description: description,
+          user: bookingForRoom.get(roomDoc.id)?.guest_name || 'Sistema',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          type: 'maintenance'
+        });
+      }
+
+      // Lógica de rotación de código de emergencia (existente)
       const pool = roomData.codes_pool;
       if (Array.isArray(pool) && pool.length > 0) {
         const nuevoCodigo = String(pool[Math.floor(Math.random() * pool.length)]);
@@ -75,13 +118,16 @@ exports.mantenimientoHabitaciones = onSchedule({
       }
     });
 
-    if (hayCambios) await batch.commit();
+    if (hayCambios) {
+      await batch.commit();
+    }
     return null;
   } catch (error) {
-    console.error("Error mantenimiento:", error);
+    console.error("Error en función de mantenimiento:", error);
     return null;
   }
 });
+
 
 // ==========================================
 // --- FUNCIÓN 3: IA CONSERJE ---

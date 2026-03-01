@@ -6,7 +6,6 @@ import {
   collection,
   doc,
   onSnapshot,
-  writeBatch,
   updateDoc,
 } from "firebase/firestore"
 import { format } from "date-fns"
@@ -22,11 +21,10 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { db } from "@/firebaseConfig"
 import type { Room } from "@/lib/data"
-import { rooms as initialRooms } from "@/lib/data"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { RefreshCw, MoreVertical } from "lucide-react"
+import { MoreVertical } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,37 +76,6 @@ export default function RoomsPage() {
     return () => unsubscribe()
   }, [])
 
-  const seedDatabase = async () => {
-    const batch = writeBatch(db)
-    initialRooms.forEach((room) => {
-      const docRef = doc(db, "rooms", room.id)
-      batch.set(docRef, {
-        name: room.name,
-        type_name: room.type_name,
-        status: room.status,
-        codes_pool: room.codes_pool || null,
-        backup_code: room.backup_code || null,
-        last_rotation: null,
-        lockId: room.lockId || "Sin Definir",
-      })
-    })
-
-    try {
-      await batch.commit()
-      toast({
-        title: "Base de datos inicializada",
-        description: `Se han agregado/actualizado ${initialRooms.length} habitaciones.`,
-      })
-    } catch (error) {
-      console.error("Error seeding database: ", error)
-      toast({
-        variant: "destructive",
-        title: "Error de inicialización",
-        description: "No se pudieron agregar los datos de las habitaciones.",
-      })
-    }
-  }
-
   const handleStatusChange = async (
     roomId: string,
     newStatus: Room["status"]
@@ -142,10 +109,6 @@ export default function RoomsPage() {
               Visualiza y actualiza el estado de cada habitación en tiempo real.
             </CardDescription>
           </div>
-          <Button onClick={seedDatabase} variant="outline">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Inicializar/Reinicializar Datos
-          </Button>
         </CardHeader>
       </Card>
 
@@ -155,10 +118,6 @@ export default function RoomsPage() {
             <p className="mb-4 text-muted-foreground">
               No se encontraron habitaciones en la base de datos o se están
               cargando.
-            </p>
-            <p className="mb-4 text-sm text-muted-foreground">
-              Si la base de datos está vacía, puedes usar el botón de arriba
-              para inicializarla con datos de ejemplo.
             </p>
           </CardContent>
         </Card>
