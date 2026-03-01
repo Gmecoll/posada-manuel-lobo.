@@ -37,7 +37,7 @@ exports.mantenimientoHabitaciones = onSchedule({
     const [roomsSnap, bookingsSnap] = await Promise.all([
       db.collection("rooms").get(),
       // Solo las reservas activas ('Checked-In') o bloqueos deben marcar una habitación como ocupada
-      db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada"]).get(),
+      db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada", "checked_in"]).get(),
     ]);
 
     if (roomsSnap.empty) return null;
@@ -64,7 +64,7 @@ exports.mantenimientoHabitaciones = onSchedule({
         const firestoreRoomId = roomsByCloudbedsId.get(booking.room_id_cloudbeds);
         if (firestoreRoomId) {
           occupiedRoomIds.add(firestoreRoomId);
-          bookingForRoom.set(firestoreRoomId, booking);
+          bookingForRoom.set(firestoreRoomId, doc.data()); // Guardamos el objeto booking completo
         }
       }
     });
@@ -86,8 +86,9 @@ exports.mantenimientoHabitaciones = onSchedule({
 
         // Crear registro de actividad para el cambio de estado
         let description;
+        const booking = bookingForRoom.get(roomDoc.id);
+
         if (newStatus === 'Ocupada') {
-          const booking = bookingForRoom.get(roomDoc.id);
           description = `Habitación ${roomData.name || roomDoc.id} ocupada por ${booking?.guest_name || 'Huésped'}.`;
         } else {
           description = `Habitación ${roomData.name || roomDoc.id} ha quedado disponible.`;
@@ -96,7 +97,7 @@ exports.mantenimientoHabitaciones = onSchedule({
         const logRef = db.collection('activity_logs').doc();
         batch.set(logRef, {
           description: description,
-          user: bookingForRoom.get(roomDoc.id)?.guest_name || 'Sistema',
+          user: booking?.guest_name || 'Sistema',
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           type: 'maintenance'
         });
@@ -353,7 +354,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 
         let isBack = false;
         let isFront = false;
-        let isPassport = lowerText.includes('pasaporte') || lowerText.includes('passport');
+        let isPassport = false;
         
         let extractedFirstName = "";
         let extractedLastName = "";
@@ -371,7 +372,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             extractedFirstName = td1NameMatch[1];
         } else if (passportMatch) {
             isPassport = true;
-            isBack = true;
             extractedLastName = passportMatch[1];
             extractedFirstName = passportMatch[2];
         } else {
@@ -516,18 +516,31 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             const gv = guestsVerification[guestIndex];
             if (avatarUrl) gv.avatar_url = avatarUrl;
             
-            if (isFront) { 
-                gv.front_uploaded = true; 
-                gv.front_text = upperText; 
-                if (document_image_url) gv.front_image_url = document_image_url;
-            }
-            if (isBack) {
+            if (isPassport) {
+                gv.is_passport = true;
+                gv.front_uploaded = true;
                 gv.back_uploaded = true;
                 gv.first_name = extractedFirstName;
                 gv.last_name = extractedLastName;
                 gv.name = formattedName || gv.name;
-                if (document_image_url) gv.back_image_url = document_image_url;
-                if (isPassport) { gv.is_passport = true; gv.front_uploaded = true; }
+                if (document_image_url) {
+                    gv.front_image_url = document_image_url;
+                    gv.back_image_url = document_image_url;
+                }
+            } else if (isFront) {
+                gv.front_uploaded = true;
+                gv.front_text = upperText;
+                if (document_image_url) {
+                    gv.front_image_url = document_image_url;
+                }
+            } else if (isBack) {
+                gv.back_uploaded = true;
+                gv.first_name = extractedFirstName;
+                gv.last_name = extractedLastName;
+                gv.name = formattedName || gv.name;
+                if (document_image_url) {
+                    gv.back_image_url = document_image_url;
+                }
             }
 
             // Validar estados
@@ -621,7 +634,6 @@ exports.testSincronizarCloudbeds = onRequest({
                         room_id_cloudbeds: room.roomID,
                         name: room.roomName || `Hab-${room.roomID}`,
                         type_name: room.roomTypeName || "Sin Tipo",
-                        room_type_id: room.roomTypeID,
                         lockId: room.doorlockID || (lockField ? lockField.customFieldValue : null),
                         last_sync: admin.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
@@ -697,7 +709,8 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
         }
 
         // 5. Guardar en Firestore
-        await db.collection("bookings").doc(`booking-${reservationID}`).set({
+        const bookingRef = db.collection("bookings").doc(`booking-${reservationID}`);
+        await bookingRef.set({
             booking_id_cloudbeds: reservationID,
             guest_name: nombreFinal,
             check_in: d.startDate,
@@ -708,6 +721,34 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
             guest_count: totalGuests, // Guardamos la cantidad extraída
             last_sync: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
+        
+        // ✨ NUEVO: Sincronizar el Lock ID desde la habitación
+        if (asignacion && asignacion.roomID) {
+            try {
+                const roomDetailsResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getRooms", {
+                     params: { roomID: asignacion.roomID },
+                     headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+
+                // La API puede devolver un array de propiedades, cada una con sus habitaciones
+                const roomData = roomDetailsResponse.data.data?.[0]?.rooms?.[0];
+                if (roomData) {
+                    const lockField = roomData.customFields?.find(f => 
+                        f.customFieldName.toLowerCase().includes('doorlock')
+                    );
+                    const lockId = roomData.doorlockID || (lockField ? lockField.customFieldValue : null);
+
+                    if (lockId) {
+                        const roomRef = db.collection("rooms").doc(`room-${asignacion.roomID}`);
+                        await roomRef.update({ lockId: lockId });
+                        console.log(`Lock ID ${lockId} sincronizado para habitación ${asignacion.roomID}`);
+                    }
+                }
+            } catch(e) {
+                 console.error("Error sincronizando Lock ID: ", e.message);
+            }
+        }
+
 
         console.log(`✅ Webhook: Reserva ${reservationID} actualizada con éxito.`);
         return res.status(200).send("OK");
@@ -716,4 +757,82 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
         console.error("❌ Error Webhook:", error.message);
         return res.status(200).send("Error procesado");
     }
+});
+
+exports.iniciarPagoServicio = onRequest({
+  region: "us-central1",
+  secrets: [MERCADO_PAGO_ACCESS_TOKEN],
+  cors: true,
+}, async (req, res) => {
+  if (req.method !== 'POST') {
+    return res.status(405).send('Method Not Allowed');
+  }
+
+  const {
+    serviceId,
+    title,
+    price,
+    quantity,
+    currency,
+    guestName,
+    roomNumber,
+    bookingId,
+    comentarios,
+    reservationDate,
+    reservationTime,
+  } = req.body;
+
+  const mp = new (require("mercadopago"))(process.env.MERCADO_PAGO_ACCESS_TOKEN);
+
+  try {
+    const preference = {
+      items: [{
+        id: serviceId,
+        title: title,
+        unit_price: Number(price),
+        quantity: Number(quantity),
+        currency_id: currency,
+      }],
+      back_urls: {
+        success: "https://posada-manuel-lobo-guest-app.web.app/feedback",
+        failure: "https://posada-manuel-lobo-guest-app.web.app/feedback",
+        pending: "https://posada-manuel-lobo-guest-app.web.app/feedback",
+      },
+      auto_return: "approved",
+      metadata: { bookingId, serviceId, quantity },
+    };
+
+    const mpResponse = await mp.preferences.create(preference);
+    
+    // Aquí es donde guardamos en ambas colecciones
+    const orderData = {
+      mp_preference_id: mpResponse.body.id,
+      servicioId: serviceId,
+      nombreServicio: title,
+      monto: Number(price) * Number(quantity),
+      cantidad: Number(quantity),
+      currency: currency,
+      fecha: admin.firestore.FieldValue.serverTimestamp(),
+      estado_pago: 'pendiente',
+      bookingId: bookingId,
+      guestName: guestName,
+      roomNumber: roomNumber,
+      comentarios: comentarios || "",
+      reservationDate: reservationDate || null,
+      reservationTime: reservationTime || null,
+      leido: false
+    };
+
+    // Guardar en 'orders' para el proceso de pago
+    await db.collection("orders").doc(mpResponse.body.id).set(orderData);
+    
+    // Guardar en 'solicitudes_servicios' para las notificaciones del admin
+    await db.collection("solicitudes_servicios").add(orderData);
+    
+    return res.status(200).json({ init_point: mpResponse.body.init_point });
+
+  } catch (error) {
+    console.error("Error al crear preferencia de Mercado Pago:", error);
+    return res.status(500).send("Error interno del servidor");
+  }
 });
