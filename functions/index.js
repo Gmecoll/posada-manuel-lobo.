@@ -317,6 +317,23 @@ exports.validarDocumentoHuesped = onObjectFinalized({
     const guestIndex = fileNameParts.length > 1 ? parseInt(fileNameParts[1]) : 1;
 
     try {
+        const bucket = admin.storage().bucket(event.data.bucket);
+
+        // Create a persistent URL for the original document
+        let document_image_url = "";
+        try {
+            const file = bucket.file(filePath);
+            const token = crypto.randomUUID();
+            await file.setMetadata({
+                metadata: {
+                    firebaseStorageDownloadTokens: token
+                }
+            });
+            document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
+        } catch (urlError) {
+            console.error("Error creating document download URL:", urlError);
+        }
+
         const vision = require('@google-cloud/vision');
         const visionClient = new vision.ImageAnnotatorClient();
         
@@ -343,15 +360,9 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         let formattedName = "";
 
         // ✨ 1. ANÁLISIS MRZ EXACTO (LA LÓGICA DE GABRIEL)
-        // Unimos todo el texto para que los saltos de línea del OCR no rompan el código
         const unifiedText = fullText.replace(/[\s\n\r]/g, '').toUpperCase();
-        
-        // CÉDULAS (TD1): El apellido está entre <<0 y < (Usamos [0-9] por si el dígito verificador es otro número)
         const td1SurnameMatch = unifiedText.match(/<<[0-9]([A-Z]+)</); 
-        // CÉDULAS (TD1): El nombre está entre << y < 
         const td1NameMatch = unifiedText.match(/[A-Z]<<([A-Z]+)</);
-
-        // PASAPORTES (TD3): P<URYAPELLIDO<<NOMBRE<
         const passportMatch = unifiedText.match(/P<[A-Z]{3}([A-Z]+)<<([A-Z]+)</);
 
         if (td1SurnameMatch && td1NameMatch) {
@@ -364,7 +375,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             extractedLastName = passportMatch[1];
             extractedFirstName = passportMatch[2];
         } else {
-            // Si no encontramos códigos ICAO, buscamos si es el frente
             const frontKeywords = ['republica', 'identidad', 'cedula', 'carteira', 'dni', 'mercosur', 'nacional', 'documento', 'registro', 'oriental', 'argentina', 'brasil'];
             const foundKeywords = frontKeywords.filter(kw => lowerText.includes(kw));
             if (foundKeywords.length > 0) isFront = true;
@@ -402,8 +412,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 const finalW = width + (padX * 2);
                 const finalH = height + (padY * 2);
 
-                const admin = require('firebase-admin');
-                const bucket = admin.storage().bucket(event.data.bucket);
                 const file = bucket.file(filePath);
                 const [buffer] = await file.download();
 
@@ -420,7 +428,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 
                 let avatarBufferToSave = croppedBuffer;
 
-                // --- IA DE RESTAURACIÓN (CODEFORMER 0.9) ---
                 try {
                     const axios = require('axios');
                     const token = REPLICATE_API_TOKEN.value();
@@ -500,18 +507,26 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                     last_name: "",
                     name: "Pendiente",
                     status: "pending",
-                    avatar_url: ""
+                    avatar_url: "",
+                    front_image_url: "",
+                    back_image_url: "",
                 };
             }
 
             const gv = guestsVerification[guestIndex];
             if (avatarUrl) gv.avatar_url = avatarUrl;
-            if (isFront) { gv.front_uploaded = true; gv.front_text = upperText; }
+            
+            if (isFront) { 
+                gv.front_uploaded = true; 
+                gv.front_text = upperText; 
+                if (document_image_url) gv.front_image_url = document_image_url;
+            }
             if (isBack) {
                 gv.back_uploaded = true;
                 gv.first_name = extractedFirstName;
                 gv.last_name = extractedLastName;
                 gv.name = formattedName || gv.name;
+                if (document_image_url) gv.back_image_url = document_image_url;
                 if (isPassport) { gv.is_passport = true; gv.front_uploaded = true; }
             }
 
