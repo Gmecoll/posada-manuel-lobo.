@@ -6,7 +6,6 @@ import { ShieldCheck, Loader2 } from "lucide-react"
 import {
   signInWithEmailAndPassword,
   onAuthStateChanged,
-  type User,
 } from "firebase/auth"
 import { auth } from "@/firebaseConfig"
 
@@ -28,15 +27,17 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isVerifyingAuth, setIsVerifyingAuth] = useState(true)
   const router = useRouter()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
         router.push("/dashboard")
+      } else {
+        setIsVerifyingAuth(false)
       }
     })
-    // Cleanup subscription on unmount
     return () => unsubscribe()
   }, [router])
 
@@ -47,7 +48,7 @@ export default function AdminLoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password)
-      router.push("/dashboard")
+      // onAuthStateChanged will handle the redirect
     } catch (firebaseError: any) {
       if (
         firebaseError.code === "auth/invalid-credential" ||
@@ -60,6 +61,14 @@ export default function AdminLoginPage() {
       }
       setIsLoading(false)
     }
+  }
+
+  if (isVerifyingAuth) {
+    return (
+      <main className="flex min-h-screen w-full flex-col items-center justify-center bg-gray-100 p-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </main>
+    )
   }
 
   return (
