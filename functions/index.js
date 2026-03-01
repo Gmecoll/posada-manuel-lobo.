@@ -298,7 +298,7 @@ exports.listarCerradurasTTLock = onCall({
 });
 
 // ==========================================
-// --- FUNCIÓN 7: VALIDACIÓN OCR + RESTAURACIÓN FACIAL (B&N FINAL) ---
+// --- FUNCIÓN 7: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA + B&N ---
 // ==========================================
 exports.validarDocumentoHuesped = onObjectFinalized({
     region: "us-central1",
@@ -307,7 +307,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 }, async (event) => {
     const filePath = event.data.name; 
     
-    if (!filePath.toLowerCase().includes('doc_')) return null;
+    if (!filePath.toLowerCase().includes('doc_') || filePath.toLowerCase().includes('avatar_')) return null;
 
     let folderId = filePath.split('/')[1]; 
     const finalBookingId = folderId.startsWith('booking-') ? folderId : `booking-${folderId}`;
@@ -319,39 +319,25 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 
     try {
         const bucket = admin.storage().bucket(event.data.bucket);
+        const file = bucket.file(filePath);
+        const sharp = require('sharp');
 
-        // Create a persistent URL for the original document
-        let document_image_url = "";
-        try {
-            const file = bucket.file(filePath);
-            const token = crypto.randomUUID();
-            await file.setMetadata({
-                metadata: {
-                    firebaseStorageDownloadTokens: token
-                }
-            });
-            document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
-        } catch (urlError) {
-            console.error("Error creating document download URL:", urlError);
-        }
+        // DESCARGAMOS EL BUFFER ORIGINAL PARA ANALIZAR
+        const [buffer] = await file.download();
 
         const vision = require('@google-cloud/vision');
         const visionClient = new vision.ImageAnnotatorClient();
         
         const [result] = await visionClient.annotateImage({
-            image: { source: { imageUri: `gs://${event.data.bucket}/${filePath}` } },
-            features: [
-                { type: 'TEXT_DETECTION' }, 
-                { type: 'FACE_DETECTION' }
-            ]
+            image: { content: buffer },
+            features: [ { type: 'TEXT_DETECTION' }, { type: 'FACE_DETECTION' } ]
         });
         
         if (!result.textAnnotations || result.textAnnotations.length === 0) return null;
 
         const fullText = result.textAnnotations[0].description;
         const upperText = fullText.toUpperCase();
-        const lowerText = fullText.toLowerCase();
-
+        
         let isBack = false;
         let isFront = false;
         let isPassport = false;
@@ -360,23 +346,26 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         let extractedLastName = "";
         let formattedName = "";
 
-        // ✨ 1. ANÁLISIS MRZ EXACTO (LA LÓGICA DE GABRIEL)
+        // 2. ANÁLISIS MRZ
         const unifiedText = fullText.replace(/[\s\n\r]/g, '').toUpperCase();
-        const td1SurnameMatch = unifiedText.match(/<<[0-9]([A-Z]+)</); 
-        const td1NameMatch = unifiedText.match(/[A-Z]<<([A-Z]+)</);
-        const passportMatch = unifiedText.match(/P<[A-Z]{3}([A-Z]+)<<([A-Z]+)</);
+        const hasMRZ = unifiedText.includes('<<');
 
-        if (td1SurnameMatch && td1NameMatch) {
-            isBack = true;
-            extractedLastName = td1SurnameMatch[1];
-            extractedFirstName = td1NameMatch[1];
-        } else if (passportMatch) {
-            isPassport = true;
-            extractedLastName = passportMatch[1];
-            extractedFirstName = passportMatch[2];
+        if (hasMRZ) {
+            isBack = true; 
+            const passportMatch = unifiedText.match(/P<[A-Z]{3}([A-Z<]+)<<([A-Z]+)/);
+            if (passportMatch) {
+                isPassport = true;
+                extractedLastName = passportMatch[1].split('<')[0].replace(/[^A-Z]/g, '');
+                extractedFirstName = passportMatch[2].replace(/[^A-Z]/g, '');
+            } else {
+                const td1SurnameMatch = unifiedText.match(/<<+[0-9O]?([A-Z]+)</); 
+                if (td1SurnameMatch) extractedLastName = td1SurnameMatch[1];
+                const td1NameMatch = unifiedText.match(/[A-Z]<<([A-Z]+)(?:<|$)/);
+                if (td1NameMatch) extractedFirstName = td1NameMatch[1];
+            }
         } else {
-            const frontKeywords = ['republica', 'identidad', 'cedula', 'carteira', 'dni', 'mercosur', 'nacional', 'documento', 'registro', 'oriental', 'argentina', 'brasil'];
-            const foundKeywords = frontKeywords.filter(kw => lowerText.includes(kw));
+            const frontKeywords = ['REPUBLICA', 'IDENTIDAD', 'CEDULA', 'CARTEIRA', 'DNI', 'MERCOSUR', 'DOCUMENTO', 'REGISTRO', 'ORIENTAL', 'ARGENTINA', 'BRASIL'];
+            const foundKeywords = frontKeywords.filter(kw => unifiedText.includes(kw));
             if (foundKeywords.length > 0) isFront = true;
             else return null; 
         }
@@ -386,14 +375,84 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             formattedName = `${capitalize(extractedFirstName)} ${capitalize(extractedLastName)}`.trim();
         }
 
-        // 2. EXTRACCIÓN Y RESTAURACIÓN FACIAL (CONVERSIÓN A B&N)
-        let avatarUrl = "";
-        if ((isFront || isPassport || isBack) && result.faceAnnotations && result.faceAnnotations.length > 0) {
+        // ✨ 3. LÓGICA DE ROTACIÓN INTELIGENTE
+        let imageRotationAngle = 0;
+        const metadata = await sharp(buffer).metadata();
+
+        if (result.faceAnnotations && result.faceAnnotations.length > 0) {
+            const roll = result.faceAnnotations[0].rollAngle;
+            if (roll > 45 && roll <= 135) imageRotationAngle = -90;
+            else if (roll < -45 && roll >= -135) imageRotationAngle = 90;
+            else if (roll > 135 || roll < -135) imageRotationAngle = 180;
+        } else {
+            if (metadata.height > metadata.width) {
+                imageRotationAngle = 90;
+            }
+        }
+        
+        // ✨ 4. LÓGICA DE RECORTE Y GUARDADO DEL DOCUMENTO
+        let document_image_url = "";
+        let finalDocBuffer = buffer;
+        const docBoundary = result.textAnnotations?.[0]?.boundingPoly;
+        let needsSave = false;
+
+        if (docBoundary) {
+            const vertices = docBoundary.vertices;
+            const xs = vertices.map(v => v.x || 0);
+            const ys = vertices.map(v => v.y || 0);
+            const xMin = Math.max(0, Math.min(...xs));
+            const yMin = Math.max(0, Math.min(...ys));
+            const width = Math.min(metadata.width - xMin, Math.max(...xs) - xMin);
+            const height = Math.min(metadata.height - yMin, Math.max(...ys) - yMin);
+            
+            if (width > 0 && height > 0) {
+              finalDocBuffer = await sharp(finalDocBuffer)
+                  .extract({ left: xMin, top: yMin, width: width, height: height })
+                  .toBuffer();
+              needsSave = true;
+            }
+        }
+
+        if (imageRotationAngle !== 0) {
+            finalDocBuffer = await sharp(finalDocBuffer).rotate(imageRotationAngle).toBuffer();
+            needsSave = true;
+        }
+
+        if (needsSave) {
             try {
-                console.log("Rostro detectado, iniciando recorte...");
+                console.log('Guardando documento procesado (recortado/rotado)...');
+                const finalProcessedBuffer = await sharp(finalDocBuffer).jpeg({ quality: 90 }).toBuffer();
+                const crypto = require('crypto');
+                const newToken = crypto.randomUUID();
+                
+                await file.save(finalProcessedBuffer, {
+                    metadata: { 
+                        contentType: 'image/jpeg',
+                        metadata: { firebaseStorageDownloadTokens: newToken }
+                    }
+                });
+                document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${newToken}`;
+            } catch (procErr) {
+                console.error("Error al guardar el documento procesado:", procErr);
+                // Fallback to original URL if processing fails
+                const [originalMetadata] = await file.getMetadata();
+                let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || crypto.randomUUID();
+                document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token.split(',')[0]}`;
+            }
+        } else {
+             // If no processing was needed, just get the original URL
+             const [originalMetadata] = await file.getMetadata();
+             let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || crypto.randomUUID();
+             document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token.split(',')[0]}`;
+        }
+
+
+        // 5. EXTRACCIÓN Y RESTAURACIÓN FACIAL (B&N)
+        let avatarUrl = "";
+        if ((isFront || isPassport) && result.faceAnnotations && result.faceAnnotations.length > 0) {
+            try {
                 const face = result.faceAnnotations[0];
                 const vertices = face.fdBoundingPoly ? face.fdBoundingPoly.vertices : face.boundingPoly.vertices;
-
                 const xs = vertices.map(v => v.x || 0);
                 const ys = vertices.map(v => v.y || 0);
                 const xMin = Math.min(...xs);
@@ -403,7 +462,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 
                 let width = xMax - xMin;
                 let height = yMax - yMin;
-
                 const padX = Math.floor(width * 0.30); 
                 const padY = Math.floor(height * 0.40);
 
@@ -411,18 +469,13 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 const finalY = Math.max(0, yMin - padY);
                 const finalW = width + (padX * 2);
                 const finalH = height + (padY * 2);
-
-                const file = bucket.file(filePath);
-                const [buffer] = await file.download();
-
-                const sharp = require('sharp');
-                const metadata = await sharp(buffer).metadata();
                 
                 const cropW = Math.min(finalW, metadata.width - finalX);
                 const cropH = Math.min(finalH, metadata.height - finalY);
 
                 const croppedBuffer = await sharp(buffer)
                     .extract({ left: finalX, top: finalY, width: cropW, height: cropH })
+                    .rotate(imageRotationAngle) 
                     .jpeg({ quality: 95 })
                     .toBuffer();
 
@@ -432,63 +485,41 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                     const axios = require('axios');
                     const token = REPLICATE_API_TOKEN.value();
                     if (token) {
-                        console.log("Enviando a Replicate (CodeFormer 0.9)...");
                         const base64Image = `data:image/jpeg;base64,${croppedBuffer.toString('base64')}`;
-                        
                         const replicateResponse = await axios.post('https://api.replicate.com/v1/predictions', {
                             version: "7de2ea26c616d5bf2245ad0d5e24f0ff9a6204578a5c876db53142edd9d2cd56", 
-                            input: { 
-                                image: base64Image, 
-                                upscale: 2, 
-                                face_upsample: true,
-                                codeformer_fidelity: 0.9 
-                            }
-                        }, {
-                            headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' }
-                        });
+                            input: { image: base64Image, upscale: 2, face_upsample: true, codeformer_fidelity: 0.9 }
+                        }, { headers: { 'Authorization': `Token ${token}`, 'Content-Type': 'application/json' } });
 
                         let prediction = replicateResponse.data;
                         while (prediction.status !== 'succeeded' && prediction.status !== 'failed') {
-                            await new Promise(resolve => setTimeout(resolve, 800));
-                            const pollResponse = await axios.get(prediction.urls.get, {
-                                headers: { 'Authorization': `Token ${token}` }
-                            });
+                            await new Promise(r => setTimeout(r, 800));
+                            const pollResponse = await axios.get(prediction.urls.get, { headers: { 'Authorization': `Token ${token}` } });
                             prediction = pollResponse.data;
                         }
 
                         if (prediction.status === 'succeeded' && prediction.output) {
-                            console.log("¡Restauración exitosa! Descargando...");
                             const imageRes = await axios.get(prediction.output, { responseType: 'arraybuffer' });
                             avatarBufferToSave = Buffer.from(imageRes.data);
                         }
                     }
                 } catch (iaError) { console.error("Error Replicate:", iaError.message); }
 
-                console.log("Convirtiendo avatar final a Blanco y Negro...");
-                const finalBnWBuffer = await sharp(avatarBufferToSave)
-                    .grayscale() 
-                    .jpeg({ quality: 90 })
-                    .toBuffer();
-
+                const finalBnWBuffer = await sharp(avatarBufferToSave).grayscale().jpeg({ quality: 90 }).toBuffer();
                 const crypto = require('crypto');
-                const accessToken = crypto.randomUUID();
+                const avatarToken = crypto.randomUUID();
                 const avatarPath = `checkins/${cleanId}/avatar_${guestIndex}.jpg`;
                 const avatarFile = bucket.file(avatarPath);
                 
                 await avatarFile.save(finalBnWBuffer, {
-                    metadata: { 
-                        contentType: 'image/jpeg',
-                        metadata: { firebaseStorageDownloadTokens: accessToken }
-                    }
+                    metadata: { contentType: 'image/jpeg', metadata: { firebaseStorageDownloadTokens: avatarToken } }
                 });
 
-                avatarUrl = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(avatarPath)}?alt=media&token=${accessToken}`;
-                console.log("Avatar B&N guardado con éxito:", avatarUrl);
-
+                avatarUrl = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(avatarPath)}?alt=media&token=${avatarToken}`;
             } catch (cropErr) { console.error("Error extracción rostro:", cropErr); }
         }
 
-        // 3. ACTUALIZACIÓN FIRESTORE
+        // 6. ACTUALIZACIÓN FIRESTORE
         const bookingRef = db.collection('bookings').doc(finalBookingId);
         await db.runTransaction(async (transaction) => {
             const docSnap = await transaction.get(bookingRef);
@@ -500,50 +531,30 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 
             if (!guestsVerification[guestIndex]) {
                 guestsVerification[guestIndex] = {
-                    front_uploaded: false,
-                    back_uploaded: false,
-                    front_text: "", 
-                    first_name: "",
-                    last_name: "",
-                    name: "Pendiente",
-                    status: "pending",
-                    avatar_url: "",
-                    front_image_url: "",
-                    back_image_url: "",
+                    front_uploaded: false, back_uploaded: false, front_text: "", first_name: "", last_name: "", name: "Pendiente", status: "pending", avatar_url: "", front_image_url: "", back_image_url: "", passport_url: ""
                 };
             }
 
             const gv = guestsVerification[guestIndex];
+            
             if (avatarUrl) gv.avatar_url = avatarUrl;
             
             if (isPassport) {
-                gv.is_passport = true;
-                gv.front_uploaded = true;
-                gv.back_uploaded = true;
-                gv.first_name = extractedFirstName;
-                gv.last_name = extractedLastName;
-                gv.name = formattedName || gv.name;
+                gv.is_passport = true; gv.front_uploaded = true; gv.back_uploaded = true; gv.first_name = extractedFirstName; gv.last_name = extractedLastName; gv.name = formattedName || gv.name;
                 if (document_image_url) {
+                    gv.passport_url = document_image_url;
                     gv.front_image_url = document_image_url;
                     gv.back_image_url = document_image_url;
                 }
             } else if (isFront) {
-                gv.front_uploaded = true;
-                gv.front_text = upperText;
-                if (document_image_url) {
-                    gv.front_image_url = document_image_url;
-                }
+                gv.front_uploaded = true; gv.front_text = upperText;
+                if (document_image_url) gv.front_image_url = document_image_url;
             } else if (isBack) {
-                gv.back_uploaded = true;
-                gv.first_name = extractedFirstName;
-                gv.last_name = extractedLastName;
-                gv.name = formattedName || gv.name;
-                if (document_image_url) {
-                    gv.back_image_url = document_image_url;
-                }
+                gv.back_uploaded = true; gv.first_name = extractedFirstName; gv.last_name = extractedLastName; gv.name = formattedName || gv.name;
+                if (document_image_url) gv.back_image_url = document_image_url;
             }
 
-            // Validar estados
+
             if (gv.front_uploaded && gv.back_uploaded && !gv.is_passport) {
                 const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
                 const textToSearch = normalize(gv.front_text);
@@ -553,8 +564,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 if (fname && lname && textToSearch.includes(fname) && textToSearch.includes(lname)) {
                     gv.status = "completed";
                 } else {
-                    gv.status = "unmatch";
-                    gv.front_uploaded = false; 
+                    gv.status = "unmatch"; gv.front_uploaded = false; 
                 }
             } else if (gv.is_passport && gv.back_uploaded) {
                 gv.status = "completed";

@@ -52,6 +52,8 @@ type GuestVerification = {
   avatar_url?: string;
   front_image_url?: string;
   back_image_url?: string;
+  passport_url?: string;
+  is_passport?: boolean;
 };
 
 type BookingWithGuests = {
