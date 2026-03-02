@@ -322,14 +322,15 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         const file = bucket.file(filePath);
         const sharp = require('sharp');
 
-        // DESCARGAMOS EL BUFFER ORIGINAL PARA ANALIZAR
-        const [buffer] = await file.download();
+        // DESCARGAMOS EL BUFFER ORIGINAL Y CORREGIMOS ROTACIÓN EXIF
+        const [originalBuffer] = await file.download();
+        const buffer = await sharp(originalBuffer).rotate().toBuffer(); // AUTO-ROTATE-EXIF
 
         const vision = require('@google-cloud/vision');
         const visionClient = new vision.ImageAnnotatorClient();
         
         const [result] = await visionClient.annotateImage({
-            image: { content: buffer },
+            image: { content: buffer }, // Usar el buffer corregido
             features: [ { type: 'TEXT_DETECTION' }, { type: 'FACE_DETECTION' } ]
         });
         
@@ -392,16 +393,25 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             else if (roll > 135 || roll < -135) imageRotationAngle = 180;
         } else if (result.textAnnotations && result.textAnnotations.length > 0) {
             const docBoundary = result.textAnnotations[0].boundingPoly;
-            if (docBoundary && docBoundary.vertices) {
-                const xs = docBoundary.vertices.map(v => v.x || 0);
-                const ys = docBoundary.vertices.map(v => v.y || 0);
-                const textWidth = Math.max(...xs) - Math.min(...xs);
-                const textHeight = Math.max(...ys) - Math.min(...ys);
+            if (docBoundary && docBoundary.vertices && docBoundary.vertices.length === 4) {
+                // Asumimos que los vértices son [TL, TR, BR, BL]
+                const p0 = docBoundary.vertices[0]; // Top-Left
+                const p3 = docBoundary.vertices[3]; // Bottom-Left
+                
+                // Calculamos el ángulo del borde izquierdo del texto.
+                const leftEdgeAngle = Math.atan2((p3.y || 0) - (p0.y || 0), (p3.x || 0) - (p0.x || 0)) * 180 / Math.PI;
+                
+                // Normalizamos a un rango de 0-360
+                const normalizedAngle = leftEdgeAngle < 0 ? leftEdgeAngle + 360 : leftEdgeAngle;
 
-                const imageIsPortrait = (metadata.height || 0) > (metadata.width || 0);
-                const textIsPortrait = textHeight > textWidth;
-
-                if (imageIsPortrait !== textIsPortrait) {
+                // Decidimos la rotación necesaria para enderezar la imagen
+                if (normalizedAngle >= 45 && normalizedAngle < 135) { // Vertical, casi derecho (90 deg)
+                    imageRotationAngle = 0;
+                } else if (normalizedAngle >= 135 && normalizedAngle < 225) { // Horizontal, de espaldas (180 deg)
+                    imageRotationAngle = 270; // Rotar 270 grados (o -90)
+                } else if (normalizedAngle >= 225 && normalizedAngle < 315) { // Vertical, al revés (-90 deg or 270 deg)
+                    imageRotationAngle = 180;
+                } else { // Horizontal, de frente (0 deg)
                     imageRotationAngle = 90;
                 }
             }
