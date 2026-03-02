@@ -92,6 +92,7 @@ export default function BookingsPage() {
             check_out: docData.check_out || docData.checkOutDate,
             status: docData.status,
             access_enabled: docData.access_enabled,
+            rooms: docData.rooms,
           } as Booking
         })
 

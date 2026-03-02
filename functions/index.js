@@ -775,7 +775,7 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
             status: d.status,
             rooms: roomsAssigned, 
             room_id_cloudbeds: roomsAssigned[0]?.room_id_cloudbeds || null,
-            room_name: roomsAssigned.map(r => r.room_name).join(" + ") || "No asignada",
+            room_name: roomsAssigned.map(r => r.room_name).join(" | ") || "No asignada",
             lock_id: roomsAssigned[0]?.lock_id || null,
             guest_count: totalGuests,
             last_sync: admin.firestore.FieldValue.serverTimestamp()

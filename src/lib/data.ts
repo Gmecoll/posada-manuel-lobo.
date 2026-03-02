@@ -17,6 +17,14 @@ export type Guest = {
   email: string;
 };
 
+export type RoomInfo = {
+  sub_reservation_id: string;
+  room_id_cloudbeds: string | null;
+  room_name: string;
+  lock_id: string | null;
+  guest_count: number;
+}
+
 export type Booking = {
   id: string;
   guest_name: string;
@@ -33,6 +41,7 @@ export type Booking = {
   ocr_text?: string;
   document_validated_at?: any;
   comments?: string;
+  rooms?: RoomInfo[];
 };
 
 export type Service = {

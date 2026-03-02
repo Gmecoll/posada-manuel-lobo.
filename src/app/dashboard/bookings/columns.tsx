@@ -110,12 +110,15 @@ export const getColumns = ({
     },
     cell: ({ row }) => {
       const booking = row.original
-      const roomName = booking.room?.name ?? booking.room_name
+      const roomName = (booking.rooms && booking.rooms.length > 0)
+        ? booking.rooms.map(r => r.room_name).join(" | ")
+        : (booking.room?.name ?? booking.room_name)
+        
       const roomTypeName = booking.room?.type_name
       return (
         <div>
           <div className="font-semibold">{roomName}</div>
-          {roomTypeName && (
+          {roomTypeName && (!booking.rooms || booking.rooms.length <= 1) && (
             <div className="text-xs text-muted-foreground">
               {roomTypeName}
             </div>
@@ -124,8 +127,12 @@ export const getColumns = ({
       )
     },
     sortingFn: (rowA, rowB) => {
-      const roomNameA = rowA.original.room?.name ?? rowA.original.room_name ?? ""
-      const roomNameB = rowB.original.room?.name ?? rowB.original.room_name ?? ""
+      const roomNameA = (rowA.original.rooms && rowA.original.rooms.length > 0)
+        ? rowA.original.rooms.map(r => r.room_name).join(" | ")
+        : (rowA.original.room?.name ?? rowA.original.room_name ?? "")
+      const roomNameB = (rowB.original.rooms && rowB.original.rooms.length > 0)
+        ? rowB.original.rooms.map(r => r.room_name).join(" | ")
+        : (rowB.original.room?.name ?? rowB.original.room_name ?? "")
       return roomNameA.localeCompare(roomNameB)
     },
   },
