@@ -382,39 +382,17 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             formattedName = `${capitalize(extractedFirstName)} ${capitalize(extractedLastName)}`.trim();
         }
 
-        // 2. LÓGICA DE ROTACIÓN INTELIGENTE
+        // 2. LÓGICA DE ROTACIÓN INTELIGENTE (SIMPLIFICADA)
         let imageRotationAngle = 0;
         const metadata = await sharp(buffer).metadata();
 
-        if (result.faceAnnotations && result.faceAnnotations.length > 0) {
+        // Solo aplicamos rotación inteligente para el anverso o pasaportes que contengan un rostro.
+        // Se elimina el fallback por texto para evitar los errores de orientación incorrecta en el dorso.
+        if ((isFront || isPassport) && result.faceAnnotations && result.faceAnnotations.length > 0) {
             const roll = result.faceAnnotations[0].rollAngle;
-            if (roll > 45 && roll <= 135) imageRotationAngle = -90;
-            else if (roll < -45 && roll >= -135) imageRotationAngle = 90;
-            else if (roll > 135 || roll < -135) imageRotationAngle = 180;
-        } else if (result.textAnnotations && result.textAnnotations.length > 0) {
-            const docBoundary = result.textAnnotations[0].boundingPoly;
-            if (docBoundary && docBoundary.vertices && docBoundary.vertices.length === 4) {
-                // Asumimos que los vértices son [TL, TR, BR, BL]
-                const p0 = docBoundary.vertices[0]; // Top-Left
-                const p3 = docBoundary.vertices[3]; // Bottom-Left
-                
-                // Calculamos el ángulo del borde izquierdo del texto.
-                const leftEdgeAngle = Math.atan2((p3.y || 0) - (p0.y || 0), (p3.x || 0) - (p0.x || 0)) * 180 / Math.PI;
-                
-                // Normalizamos a un rango de 0-360
-                const normalizedAngle = leftEdgeAngle < 0 ? leftEdgeAngle + 360 : leftEdgeAngle;
-
-                // Decidimos la rotación necesaria para enderezar la imagen
-                if (normalizedAngle >= 45 && normalizedAngle < 135) { // Vertical, casi derecho (90 deg)
-                    imageRotationAngle = 0;
-                } else if (normalizedAngle >= 135 && normalizedAngle < 225) { // Horizontal, de espaldas (180 deg)
-                    imageRotationAngle = 270; // Rotar 270 grados (o -90)
-                } else if (normalizedAngle >= 225 && normalizedAngle < 315) { // Vertical, al revés (-90 deg or 270 deg)
-                    imageRotationAngle = 180;
-                } else { // Horizontal, de frente (0 deg)
-                    imageRotationAngle = 90;
-                }
-            }
+            if (roll > 45 && roll <= 135) imageRotationAngle = -90; // Rotado a la izquierda, corregir a la derecha
+            else if (roll < -45 && roll >= -135) imageRotationAngle = 90; // Rotado a la derecha, corregir a la izquierda
+            else if (roll > 135 || roll < -135) imageRotationAngle = 180; // Al revés
         }
         
         // ✨ 3. RECORTE Y GUARDADO DEL DOCUMENTO (CON PADDING Y ANTI-CACHÉ)
@@ -877,3 +855,5 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
         return res.status(500).json({ success: false, error: error.message });
     }
 });
+
+    
