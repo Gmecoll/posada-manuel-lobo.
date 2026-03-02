@@ -346,21 +346,27 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         let extractedLastName = "";
         let formattedName = "";
 
-        // 2. ANÁLISIS MRZ
-        const unifiedText = fullText.replace(/[\s\n\r]/g, '').toUpperCase();
+        // ✨ 1. ANÁLISIS MRZ (NUEVA LÓGICA ANTI-ESPACIOS)
+        // Convertimos todos los espacios y saltos de línea en '<' para estandarizar el código MRZ
+        const unifiedText = fullText.toUpperCase().replace(/[\s\n\r]+/g, '<');
         const hasMRZ = unifiedText.includes('<<');
 
         if (hasMRZ) {
             isBack = true; 
-            const passportMatch = unifiedText.match(/P<[A-Z]{3}([A-Z<]+)<<([A-Z]+)/);
+            
+            // Pasaportes
+            const passportMatch = unifiedText.match(/P<[A-Z]{3}<*([A-Z]+)<<+([A-Z]+)/);
             if (passportMatch) {
                 isPassport = true;
-                extractedLastName = passportMatch[1].split('<')[0].replace(/[^A-Z]/g, '');
-                extractedFirstName = passportMatch[2].replace(/[^A-Z]/g, '');
+                extractedLastName = passportMatch[1];
+                extractedFirstName = passportMatch[2];
             } else {
-                const td1SurnameMatch = unifiedText.match(/<<+[0-9O]?([A-Z]+)</); 
+                // Cédulas: Apellido (Acepta <<, números opcionales, y < adicionales)
+                const td1SurnameMatch = unifiedText.match(/<<+[0-9O]?<*([A-Z]+)</); 
                 if (td1SurnameMatch) extractedLastName = td1SurnameMatch[1];
-                const td1NameMatch = unifiedText.match(/[A-Z]<<([A-Z]+)(?:<|$)/);
+                
+                // Cédulas: Nombre (Busca letras seguidas de <<, y frena en el próximo <)
+                const td1NameMatch = unifiedText.match(/[A-Z]<<+<*([A-Z]+)(?:<|$)/);
                 if (td1NameMatch) extractedFirstName = td1NameMatch[1];
             }
         } else {
@@ -375,7 +381,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             formattedName = `${capitalize(extractedFirstName)} ${capitalize(extractedLastName)}`.trim();
         }
 
-        // ✨ 3. LÓGICA DE ROTACIÓN INTELIGENTE
+        // 2. LÓGICA DE ROTACIÓN INTELIGENTE
         let imageRotationAngle = 0;
         const metadata = await sharp(buffer).metadata();
 
@@ -384,30 +390,52 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             if (roll > 45 && roll <= 135) imageRotationAngle = -90;
             else if (roll < -45 && roll >= -135) imageRotationAngle = 90;
             else if (roll > 135 || roll < -135) imageRotationAngle = 180;
-        } else {
-            if (metadata.height > metadata.width) {
-                imageRotationAngle = 90;
+        } else if (result.textAnnotations && result.textAnnotations.length > 0) {
+            const docBoundary = result.textAnnotations[0].boundingPoly;
+            if (docBoundary && docBoundary.vertices) {
+                const xs = docBoundary.vertices.map(v => v.x || 0);
+                const ys = docBoundary.vertices.map(v => v.y || 0);
+                const textWidth = Math.max(...xs) - Math.min(...xs);
+                const textHeight = Math.max(...ys) - Math.min(...ys);
+
+                const imageIsPortrait = (metadata.height || 0) > (metadata.width || 0);
+                const textIsPortrait = textHeight > textWidth;
+
+                if (imageIsPortrait !== textIsPortrait) {
+                    imageRotationAngle = 90;
+                }
             }
         }
         
-        // ✨ 4. LÓGICA DE RECORTE Y GUARDADO DEL DOCUMENTO
+        // ✨ 3. RECORTE Y GUARDADO DEL DOCUMENTO (CON PADDING Y ANTI-CACHÉ)
         let document_image_url = "";
         let finalDocBuffer = buffer;
         const docBoundary = result.textAnnotations?.[0]?.boundingPoly;
         let needsSave = false;
 
         if (docBoundary) {
-            const vertices = docBoundary.vertices;
-            const xs = vertices.map(v => v.x || 0);
-            const ys = vertices.map(v => v.y || 0);
+            const xs = docBoundary.vertices.map(v => v.x || 0);
+            const ys = docBoundary.vertices.map(v => v.y || 0);
             const xMin = Math.max(0, Math.min(...xs));
             const yMin = Math.max(0, Math.min(...ys));
-            const width = Math.min(metadata.width - xMin, Math.max(...xs) - xMin);
-            const height = Math.min(metadata.height - yMin, Math.max(...ys) - yMin);
+            const xMax = Math.min(metadata.width, Math.max(...xs));
+            const yMax = Math.min(metadata.height, Math.max(...ys));
             
-            if (width > 0 && height > 0) {
+            const w = xMax - xMin;
+            const h = yMax - yMin;
+
+            // Añadimos un 5% de margen para que no quede cortado muy al ras
+            const padX = Math.floor(w * 0.05);
+            const padY = Math.floor(h * 0.05);
+
+            const cropX = Math.max(0, xMin - padX);
+            const cropY = Math.max(0, yMin - padY);
+            const cropW = Math.min(metadata.width - cropX, w + padX * 2);
+            const cropH = Math.min(metadata.height - cropY, h + padY * 2);
+
+            if (cropW > 50 && cropH > 50) {
               finalDocBuffer = await sharp(finalDocBuffer)
-                  .extract({ left: xMin, top: yMin, width: width, height: height })
+                  .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
                   .toBuffer();
               needsSave = true;
             }
@@ -423,6 +451,8 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 console.log('Guardando documento procesado (recortado/rotado)...');
                 const finalProcessedBuffer = await sharp(finalDocBuffer).jpeg({ quality: 90 }).toBuffer();
                 const crypto = require('crypto');
+                
+                // Generamos un NUEVO token para "romper" la caché del navegador
                 const newToken = crypto.randomUUID();
                 
                 await file.save(finalProcessedBuffer, {
@@ -434,20 +464,18 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${newToken}`;
             } catch (procErr) {
                 console.error("Error al guardar el documento procesado:", procErr);
-                // Fallback to original URL if processing fails
                 const [originalMetadata] = await file.getMetadata();
-                let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || crypto.randomUUID();
+                let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || require('crypto').randomUUID();
                 document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token.split(',')[0]}`;
             }
         } else {
-             // If no processing was needed, just get the original URL
              const [originalMetadata] = await file.getMetadata();
-             let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || crypto.randomUUID();
+             let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || require('crypto').randomUUID();
              document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token.split(',')[0]}`;
         }
 
 
-        // 5. EXTRACCIÓN Y RESTAURACIÓN FACIAL (B&N)
+        // 4. EXTRACCIÓN Y RESTAURACIÓN FACIAL (B&N)
         let avatarUrl = "";
         if ((isFront || isPassport) && result.faceAnnotations && result.faceAnnotations.length > 0) {
             try {
@@ -519,7 +547,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             } catch (cropErr) { console.error("Error extracción rostro:", cropErr); }
         }
 
-        // 6. ACTUALIZACIÓN FIRESTORE
+        // 5. ACTUALIZACIÓN FIRESTORE
         const bookingRef = db.collection('bookings').doc(finalBookingId);
         await db.runTransaction(async (transaction) => {
             const docSnap = await transaction.get(bookingRef);
@@ -672,13 +700,10 @@ exports.testSincronizarCloudbeds = onRequest({
 });
 
 // ==========================================
-// --- FUNCIÓN 9: SINCRONIZAR RACK DE RESERVAS (30 DÍAS) ---
+// --- FUNCIÓN 9: SINCRONIZAR RACK DE RESERVAS (MULTI-HABITACIÓN PRO) ---
 // ==========================================
-
-// --- WEBHOOK: Actualización Automática de Reservas ---
 exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res) => {
     try {
-        // 1. Extraer ID sin importar si viene como ID o Id
         const reservationID = req.body.reservationID || req.body.reservationId;
         
         if (!reservationID) {
@@ -686,11 +711,11 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
             return res.status(200).send("No ID");
         }
 
-        // 2. Obtener credenciales
+        const db = admin.firestore();
         const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
         const accessToken = cbAuthDoc.data().access_token.trim();
 
-        // 3. CONSULTA PROFUNDA
+        const axios = require('axios');
         const detalleResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservation", {
             params: { reservationID },
             headers: { 'Authorization': `Bearer ${accessToken}` }
@@ -698,27 +723,61 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
 
         const d = detalleResponse.data.data;
         
-        // 4. Mapear habitación
-        const asignacion = (d.assigned && d.assigned.length > 0) ? d.assigned[0] : null;
-
         const nombreCloudbeds = d.guestName || `${d.firstName || ""} ${d.lastName || ""}`.trim();
         const nombreFinal = nombreCloudbeds || "Huésped";
 
-        // ✨ NUEVO: Extracción real de huéspedes desde la asignación de la habitación
-        let totalGuests = 1; 
-        if (asignacion) {
-            const adults = parseInt(asignacion.adults) || 0;
-            const children = parseInt(asignacion.children) || 0;
-            const sum = adults + children;
-            if (sum > 0) totalGuests = sum;
-        } else if (d.unassigned && d.unassigned.length > 0) {
-            const adults = parseInt(d.unassigned[0].adults) || 0;
-            const children = parseInt(d.unassigned[0].children) || 0;
-            const sum = adults + children;
-            if (sum > 0) totalGuests = sum;
+        let totalGuests = 0;
+        let roomsAssigned = [];
+        
+        const allRooms = [];
+        if (d.assigned && d.assigned.length > 0) allRooms.push(...d.assigned);
+        if (d.unassigned && d.unassigned.length > 0) allRooms.push(...d.unassigned);
+
+        // Recorremos TODAS las habitaciones asignadas
+        for (const room of allRooms) {
+            const adults = parseInt(room.adults) || 0;
+            const children = parseInt(room.children) || 0;
+            
+            // Calculamos huéspedes por habitación (mínimo 1 por cuarto para exigir 1 foto)
+            let roomGuests = adults + children;
+            if (roomGuests === 0) roomGuests = 1; 
+            
+            totalGuests += roomGuests;
+
+            let lockId = null;
+
+            if (room.roomID) {
+                try {
+                    const roomDetailsResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getRooms", {
+                         params: { roomID: room.roomID },
+                         headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+
+                    const rData = roomDetailsResponse.data.data?.[0]?.rooms?.[0];
+                    if (rData) {
+                        const lockField = rData.customFields?.find(f => f.customFieldName.toLowerCase().includes('doorlock'));
+                        lockId = rData.doorlockID || (lockField ? lockField.customFieldValue : null);
+
+                        if (lockId) {
+                            await db.collection("rooms").doc(`room-${room.roomID}`).update({ lockId: lockId });
+                        }
+                    }
+                } catch(e) {
+                     console.error(`Error sincronizando Lock ID para hab ${room.roomID}: `, e.message);
+                }
+            }
+
+            roomsAssigned.push({
+                sub_reservation_id: room.subReservationID || reservationID,
+                room_id_cloudbeds: room.roomID || null,
+                room_name: room.roomName || "No asignada",
+                lock_id: lockId,
+                guest_count: roomGuests // ✨ NUEVO: Huéspedes específicos de esta habitación
+            });
         }
 
-        // 5. Guardar en Firestore
+        if (totalGuests === 0) totalGuests = 1;
+
         const bookingRef = db.collection("bookings").doc(`booking-${reservationID}`);
         await bookingRef.set({
             booking_id_cloudbeds: reservationID,
@@ -726,41 +785,15 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
             check_in: d.startDate,
             check_out: d.endDate,
             status: d.status,
-            room_id_cloudbeds: asignacion ? asignacion.roomID : null,
-            room_name: asignacion ? asignacion.roomName : "No asignada",
-            guest_count: totalGuests, // Guardamos la cantidad extraída
+            rooms: roomsAssigned, 
+            room_id_cloudbeds: roomsAssigned[0]?.room_id_cloudbeds || null,
+            room_name: roomsAssigned.map(r => r.room_name).join(" + ") || "No asignada",
+            lock_id: roomsAssigned[0]?.lock_id || null,
+            guest_count: totalGuests,
             last_sync: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         
-        // ✨ NUEVO: Sincronizar el Lock ID desde la habitación
-        if (asignacion && asignacion.roomID) {
-            try {
-                const roomDetailsResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getRooms", {
-                     params: { roomID: asignacion.roomID },
-                     headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-
-                // La API puede devolver un array de propiedades, cada una con sus habitaciones
-                const roomData = roomDetailsResponse.data.data?.[0]?.rooms?.[0];
-                if (roomData) {
-                    const lockField = roomData.customFields?.find(f => 
-                        f.customFieldName.toLowerCase().includes('doorlock')
-                    );
-                    const lockId = roomData.doorlockID || (lockField ? lockField.customFieldValue : null);
-
-                    if (lockId) {
-                        const roomRef = db.collection("rooms").doc(`room-${asignacion.roomID}`);
-                        await roomRef.update({ lockId: lockId });
-                        console.log(`Lock ID ${lockId} sincronizado para habitación ${asignacion.roomID}`);
-                    }
-                }
-            } catch(e) {
-                 console.error("Error sincronizando Lock ID: ", e.message);
-            }
-        }
-
-
-        console.log(`✅ Webhook: Reserva ${reservationID} actualizada con éxito.`);
+        console.log(`✅ Webhook: Reserva ${reservationID} actualizada con éxito (${roomsAssigned.length} habitaciones).`);
         return res.status(200).send("OK");
 
     } catch (error) {
@@ -769,80 +802,68 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
     }
 });
 
-exports.iniciarPagoServicio = onRequest({
-  region: "us-central1",
-  secrets: [MERCADO_PAGO_ACCESS_TOKEN],
-  cors: true,
-}, async (req, res) => {
-  if (req.method !== 'POST') {
-    return res.status(405).send('Method Not Allowed');
-  }
+// ==========================================
+// --- FUNCIÓN DE UTILIDAD: SINCRONIZAR TODAS LAS HABITACIONES ---
+// ==========================================
+exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => {
+    try {
+        const db = admin.firestore();
+        
+        // 1. Obtener credenciales de Cloudbeds
+        const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
+        if (!cbAuthDoc.exists) return res.status(400).send("No hay credenciales de Cloudbeds.");
+        
+        const accessToken = cbAuthDoc.data().access_token.trim();
+        const axios = require('axios');
 
-  const {
-    serviceId,
-    title,
-    price,
-    quantity,
-    currency,
-    guestName,
-    roomNumber,
-    bookingId,
-    comentarios,
-    reservationDate,
-    reservationTime,
-  } = req.body;
+        console.log("Iniciando sincronización masiva de habitaciones...");
 
-  const mp = new (require("mercadopago"))(process.env.MERCADO_PAGO_ACCESS_TOKEN);
+        // 2. Pedir TODAS las habitaciones a Cloudbeds (propertyID está implícito en el token)
+        const roomsResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getRooms", {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
 
-  try {
-    const preference = {
-      items: [{
-        id: serviceId,
-        title: title,
-        unit_price: Number(price),
-        quantity: Number(quantity),
-        currency_id: currency,
-      }],
-      back_urls: {
-        success: "https://posada-manuel-lobo-guest-app.web.app/feedback",
-        failure: "https://posada-manuel-lobo-guest-app.web.app/feedback",
-        pending: "https://posada-manuel-lobo-guest-app.web.app/feedback",
-      },
-      auto_return: "approved",
-      metadata: { bookingId, serviceId, quantity },
-    };
+        // Cloudbeds devuelve un array de propiedades, tomamos la primera
+        const properties = roomsResponse.data.data;
+        if (!properties || properties.length === 0) {
+             return res.status(200).send("No se encontraron propiedades.");
+        }
 
-    const mpResponse = await mp.preferences.create(preference);
-    
-    // Aquí es donde guardamos en ambas colecciones
-    const orderData = {
-      mp_preference_id: mpResponse.body.id,
-      servicioId: serviceId,
-      nombreServicio: title,
-      monto: Number(price) * Number(quantity),
-      cantidad: Number(quantity),
-      currency: currency,
-      fecha: admin.firestore.FieldValue.serverTimestamp(),
-      estado_pago: 'pendiente',
-      bookingId: bookingId,
-      guestName: guestName,
-      roomNumber: roomNumber,
-      comentarios: comentarios || "",
-      reservationDate: reservationDate || null,
-      reservationTime: reservationTime || null,
-      leido: false
-    };
+        const roomsList = properties[0].rooms || [];
+        let updatedCount = 0;
 
-    // Guardar en 'orders' para el proceso de pago
-    await db.collection("orders").doc(mpResponse.body.id).set(orderData);
-    
-    // Guardar en 'solicitudes_servicios' para las notificaciones del admin
-    await db.collection("solicitudes_servicios").add(orderData);
-    
-    return res.status(200).json({ init_point: mpResponse.body.init_point });
+        // 3. Procesar cada habitación y actualizar Firestore
+        for (const room of roomsList) {
+            const roomId = room.roomID;
+            const roomName = room.roomName;
+            
+            // Buscar el Custom Field del Lock ID
+            const lockField = room.customFields?.find(f => f.customFieldName.toLowerCase().includes('doorlock'));
+            const lockId = room.doorlockID || (lockField ? lockField.customFieldValue : null) || "";
 
-  } catch (error) {
-    console.error("Error al crear preferencia de Mercado Pago:", error);
-    return res.status(500).send("Error interno del servidor");
-  }
+            const roomRef = db.collection("rooms").doc(`room-${roomId}`);
+            
+            // Guardar usando merge para no pisar el backup_code si ya existe
+            await roomRef.set({
+                id: `room-${roomId}`,
+                room_id_cloudbeds: roomId,
+                name: roomName,
+                lockId: lockId,
+                last_sync: admin.firestore.FieldValue.serverTimestamp()
+            }, { merge: true });
+
+            updatedCount++;
+            console.log(`Actualizada hab: ${roomName} (ID: ${roomId}) - Lock: ${lockId}`);
+        }
+
+        return res.status(200).json({ 
+            success: true, 
+            message: `Sincronización completa. ${updatedCount} habitaciones actualizadas.`,
+            rooms_processed: updatedCount
+        });
+
+    } catch (error) {
+        console.error("❌ Error Sincronizando Habitaciones:", error.message);
+        return res.status(500).json({ success: false, error: error.message });
+    }
 });
