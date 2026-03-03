@@ -22,7 +22,84 @@ const CLOUDBEDS_CLIENT_SECRET = defineSecret("CLOUDBEDS_CLIENT_SECRET");
 const TTLOCK_CLIENT_ID = defineSecret("TTLOCK_CLIENT_ID");
 const TTLOCK_CLIENT_SECRET = defineSecret("TTLOCK_CLIENT_SECRET");
 const REPLICATE_API_TOKEN = defineSecret("REPLICATE_API_TOKEN");
+// ==========================================
+// --- FUNCIÓN 1: INICIAR PAGO SERVICIO (MERCADO PAGO) ---
+// ==========================================
+const { MercadoPagoConfig, Preference } = require('mercadopago');
 
+exports.iniciarPagoServicio = onCall({
+    region: "us-central1",
+    cors: true,
+    secrets: ["MERCADO_PAGO_ACCESS_TOKEN"]
+}, async (request) => {
+    try {
+        const data = request.data;
+        
+        // 1. Configurar cliente de MP
+        const client = new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
+        const preference = new Preference(client);
+        
+        // 2. Armar la preferencia de Mercado Pago
+        const preferenceData = {
+            body: {
+                items: [{
+                    id: data.serviceId || "servicio",
+                    title: data.title || "Servicio Sky Rooms",
+                    quantity: data.quantity || 1,
+                    unit_price: Number(data.price || 0),
+                    currency_id: "UYU"
+                }],
+                back_urls: {
+                    success: data.success_url || "https://tudominio.com",
+                    failure: data.failure_url || "https://tudominio.com",
+                    pending: data.pending_url || "https://tudominio.com"
+                },
+                auto_return: "approved",
+                external_reference: data.external_reference || "skyrooms",
+            }
+        };
+
+        const prefResponse = await preference.create(preferenceData);
+
+        // 3. Registrar en Firestore (Colección orders)
+        const orderRef = await db.collection('orders').add({
+            serviceId: data.serviceId || "",
+            title: data.title || "Servicio Sky Rooms",
+            quantity: data.quantity || 1,
+            total: Number(data.price || 0) * (data.quantity || 1),
+            userId: data.userId || "",
+            guestName: data.guestName || "Huésped",
+            roomNumber: data.roomNumber || "",
+            comments: data.comments || "",
+            status: "pending",
+            preferenceId: prefResponse.id,
+            createdAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        // 4. Webhook a Make.com
+        try {
+            await axios.post("https://hook.us2.make.com/8v6qga9kx9sm3ef488yl664aw8uceeub", {
+                orderId: orderRef.id,
+                guestName: data.guestName,
+                roomNumber: data.roomNumber,
+                service: data.title,
+                status: "Pago Iniciado"
+            });
+        } catch (err) {
+            console.log("Error notificando a Make.com:", err.message);
+        }
+
+        return { 
+            success: true, 
+            preferenceId: prefResponse.id,
+            init_point: prefResponse.init_point
+        };
+
+    } catch (error) {
+        console.error("Error en Mercado Pago:", error);
+        throw new HttpsError('internal', error.message);
+    }
+});
 // ==========================================
 // --- FUNCIÓN 2: MANTENIMIENTO ---
 // ==========================================
@@ -50,7 +127,7 @@ exports.mantenimientoHabitaciones = onSchedule({
     });
 
     const occupiedRoomIds = new Set();
-    const bookingForRoom = new Map();
+    const bookingForRoom = new Map(); 
 
     bookingsSnap.forEach((doc) => {
       const booking = doc.data();
@@ -58,13 +135,15 @@ exports.mantenimientoHabitaciones = onSchedule({
       const fechaOut = new Date(booking.check_out + "T00:00:00");
 
       if (hoy >= fechaIn && hoy < fechaOut) {
-        if (Array.isArray(booking.rooms) && booking.rooms.length > 0) {
+        if (booking.rooms && Array.isArray(booking.rooms)) {
           booking.rooms.forEach(roomInfo => {
             if (roomInfo.room_id_cloudbeds) {
               const firestoreRoomId = roomsByCloudbedsId.get(String(roomInfo.room_id_cloudbeds));
               if (firestoreRoomId) {
                 occupiedRoomIds.add(firestoreRoomId);
-                bookingForRoom.set(firestoreRoomId, booking); 
+                if (!bookingForRoom.has(firestoreRoomId)) {
+                   bookingForRoom.set(firestoreRoomId, booking);
+                }
               }
             }
           });
@@ -618,12 +697,18 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             else if (partialIndex > 0) overallStatus = `partial ${partialIndex}`;
             else if (completedCount > 0) overallStatus = `completed ${completedCount}`;
 
-            transaction.update(bookingRef, {
+            const updatePayload = {
                 document_status: overallStatus,
                 guests_verification: guestsVerification, 
                 last_verified_name: allNames.join(' | ') || formattedName || "Procesando...",
                 document_validated_at: admin.firestore.FieldValue.serverTimestamp()
-            });
+            };
+
+            if (overallStatus === 'approved' && bData.status !== 'Checked-In' && bData.status !== 'checked_in') {
+                updatePayload.status = 'Confirmed';
+            }
+
+            transaction.update(bookingRef, updatePayload);
         });
 
     } catch (e) { console.error("OCR Error:", e); }
@@ -781,7 +866,7 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
             status: d.status,
             rooms: roomsAssigned, 
             room_id_cloudbeds: roomsAssigned[0]?.room_id_cloudbeds || null,
-            room_name: roomsAssigned.map(r => r.room_name).join(" | ") || "No asignada",
+            room_name: roomsAssigned.map(r => r.room_name).join(" + ") || "No asignada",
             lock_id: roomsAssigned[0]?.lock_id || null,
             guest_count: totalGuests,
             last_sync: admin.firestore.FieldValue.serverTimestamp()
@@ -863,6 +948,3 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
 });
 
     
-
-
-

@@ -10,7 +10,7 @@ import {
 } from "firebase/firestore"
 import { addDays, format, differenceInDays, startOfDay, parse } from "date-fns"
 import { es } from "date-fns/locale"
-import { Plus, GripVertical } from "lucide-react"
+import { Plus, GripVertical, RefreshCw } from "lucide-react"
 
 import { db } from "@/firebaseConfig"
 import type { Room, Booking } from "@/lib/data"
@@ -26,6 +26,7 @@ import {
   CardTitle,
 } from "./ui/card"
 import { Skeleton } from "./ui/skeleton"
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 
 const getRoomNumber = (name: string) => {
   if (!name) return 0;
@@ -38,6 +39,10 @@ export function BookingRack() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [roomsMap, setRoomsMap] = useState<Map<string, Room>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
+  const [viewRange, setViewRange] = useState<number>(30);
+  
+  const [isSyncing, setIsSyncing] = useState(false) 
+  
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false)
   const [bookingToEdit, setBookingToEdit] =
     useState<(Booking & { room: Room | null }) | null>(null)
@@ -46,6 +51,44 @@ export function BookingRack() {
     checkInDate: string
   } | null>(null)
   const { toast } = useToast()
+
+  const handleManualSync = async () => {
+    setIsSyncing(true)
+    toast({
+      title: "Sincronizando...",
+      description: "Obteniendo datos frescos de Cloudbeds.",
+    })
+
+    try {
+        const activeBookingIds = [...new Set(bookings.map(b => b.booking_id_cloudbeds))].filter(Boolean);
+        
+        const webhookUrl = "https://webhookcloudbeds-kms3iex6ya-uc.a.run.app";
+
+        let successCount = 0;
+
+        for (const cloudbedsId of activeBookingIds) {
+             try {
+                 await fetch(`${webhookUrl}?reservationID=${cloudbedsId}`);
+                 successCount++;
+             } catch (e) {
+                 console.warn(`Fallo sincronizando ${cloudbedsId}`);
+             }
+        }
+
+        toast({
+            title: "Sincronización Completa",
+            description: `Se actualizaron ${successCount} reservas desde Cloudbeds.`,
+        })
+    } catch (error) {
+        toast({
+            variant: "destructive",
+            title: "Error",
+            description: "Falló la sincronización con Cloudbeds.",
+        })
+    } finally {
+        setIsSyncing(false)
+    }
+  }
 
   useEffect(() => {
     setIsLoading(true);
@@ -57,10 +100,10 @@ export function BookingRack() {
           .map((doc) => ({
             id: doc.id,
             ...doc.data(),
-          }))
+          } as Room)) 
           .sort(
             (a, b) => getRoomNumber(a.name) - getRoomNumber(b.name)
-          ) as Room[]
+          )
         setRooms(roomsFromDb)
 
         const newRoomsMap = new Map<string, Room>();
@@ -91,14 +134,27 @@ export function BookingRack() {
     const unsubscribeBookings = onSnapshot(
       bookingsCol,
       (snapshot) => {
-        const bookingsFromDb = snapshot.docs.map((doc) => {
+        const bookingsFromDb = snapshot.docs.flatMap((doc) => {
           const data = doc.data()
+          
+          if (data.rooms && Array.isArray(data.rooms) && data.rooms.length > 0) {
+            return data.rooms.map((roomData: any) => {
+              const room = roomsMap.get(roomData.room_id_cloudbeds);
+              return {
+                id: `${doc.id}-${roomData.room_id_cloudbeds}`, 
+                ...data,
+                roomId: room ? room.id : '',
+                room_name: roomData.room_name 
+              } as Booking;
+            });
+          }
+
           const room = data.room_id_cloudbeds ? roomsMap.get(data.room_id_cloudbeds) : null;
-          return { 
+          return [{ 
               id: doc.id, 
               ...data,
               roomId: room ? room.id : '',
-            } as Booking
+            } as Booking]
         })
         setBookings(bookingsFromDb)
       },
@@ -111,7 +167,7 @@ export function BookingRack() {
   }, [roomsMap])
 
   const today = startOfDay(new Date())
-  const days = Array.from({ length: 30 }, (_, i) => addDays(today, i))
+  const days = Array.from({ length: viewRange }, (_, i) => addDays(today, i))
 
   const getBookingSegments = (roomId: string) => {
     const roomBookings = bookings
@@ -140,9 +196,9 @@ export function BookingRack() {
       const startIndex = differenceInDays(startDay, today)
       let duration = differenceInDays(endDay, startDay)
 
-      if (duration > 0 && startIndex < 30) {
-        if (startIndex + duration > 30) {
-            duration = 30 - startIndex
+      if (duration > 0 && startIndex < viewRange) {
+        if (startIndex + duration > viewRange) {
+            duration = viewRange - startIndex
         }
         segments.push({
           booking: booking,
@@ -186,7 +242,6 @@ export function BookingRack() {
         })
         return
       }
-
 
       const checkIn = parse(bookingData.checkInDate, "dd/MM/yyyy", new Date())
       const checkOut = parse(bookingData.checkOutDate, "dd/MM/yyyy", new Date())
@@ -232,17 +287,47 @@ export function BookingRack() {
     Bloqueada: "bg-red-500 border-red-700 text-white",
   }
 
+  const getCellWidth = (range: number) => {
+    if (range <= 1) return 'minmax(300px, 1fr)';
+    if (range <= 7) return 'minmax(100px, 1fr)';
+    return 'minmax(60px, 1fr)';
+  };
+  const cellWidth = getCellWidth(viewRange);
+
   return (
     <>
       <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">Rack de Reservas</CardTitle>
-          <CardDescription>
-            Visualización de la ocupación de los próximos 30 días.
-          </CardDescription>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+          <div className="space-y-1">
+            <CardTitle className="font-headline">Rack de Reservas</CardTitle>
+            <CardDescription>
+              Visualización de la ocupación para el período seleccionado.
+            </CardDescription>
+          </div>
+          
+          <div className="flex flex-col-reverse sm:flex-row items-end sm:items-center gap-2">
+            <Tabs defaultValue="30" onValueChange={(value) => setViewRange(Number(value))} className="w-auto">
+              <TabsList>
+                <TabsTrigger value="1">1D</TabsTrigger>
+                <TabsTrigger value="7">7D</TabsTrigger>
+                <TabsTrigger value="30">30D</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleManualSync} 
+              disabled={isSyncing}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
+              {isSyncing ? "Sinc..." : "Actualizar"}
+            </Button>
+          </div>
         </CardHeader>
+
         <CardContent>
-          <div className="relative overflow-x-auto border rounded-lg">
+          <div className="relative overflow-x-auto border rounded-lg mt-4">
            {isLoading ? (
              <div className="p-4">
                 <Skeleton className="h-10 w-full mb-1" />
@@ -252,7 +337,7 @@ export function BookingRack() {
             <div
               className="grid bg-border -m-px"
               style={{
-                gridTemplateColumns: `minmax(150px, 1fr) repeat(${days.length}, minmax(50px, 1fr))`,
+                gridTemplateColumns: `minmax(150px, 1fr) repeat(${days.length}, ${cellWidth})`,
               }}
             >
               {/* Header */}
