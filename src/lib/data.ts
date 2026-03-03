@@ -27,6 +27,7 @@ export type RoomInfo = {
 
 export type Booking = {
   id: string;
+  docId?: string;
   guest_name: string;
   booking_id_cloudbeds: string;
   room_id_cloudbeds: string;

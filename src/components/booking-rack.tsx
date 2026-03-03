@@ -143,6 +143,7 @@ export function BookingRack() {
               const room = roomsMap.get(roomData.room_id_cloudbeds);
               return {
                 id: `${doc.id}-${roomData.room_id_cloudbeds}`, 
+                docId: doc.id,
                 ...data,
                 roomId: room ? room.id : '',
                 room_name: roomData.room_name 
@@ -153,6 +154,7 @@ export function BookingRack() {
           const room = data.room_id_cloudbeds ? roomsMap.get(data.room_id_cloudbeds) : null;
           return [{ 
               id: doc.id, 
+              docId: doc.id,
               ...data,
               roomId: room ? room.id : '',
             } as Booking]
@@ -259,8 +261,20 @@ export function BookingRack() {
       }
 
       if (isEditing && bookingToEdit) {
-        const bookingRef = doc(db, "bookings", bookingToEdit.id)
+        if (!bookingToEdit.docId) {
+          toast({
+            variant: "destructive",
+            title: "Error",
+            description: "ID de documento de reserva no encontrado.",
+          })
+          return
+        }
+        const bookingRef = doc(db, "bookings", bookingToEdit.docId)
         await updateDoc(bookingRef, bookingToSave)
+        toast({
+          title: "Reserva actualizada",
+          description: "Los cambios se han guardado correctamente.",
+        })
       } else {
         await addDoc(collection(db, "bookings"), bookingToSave)
         toast({
