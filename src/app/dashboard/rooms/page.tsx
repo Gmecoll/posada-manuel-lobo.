@@ -58,6 +58,8 @@ export default function RoomsPage() {
             id: doc.id,
             ...doc.data(),
           }))
+          // Ocultar habitación 4
+          .filter((room: any) => room.name !== "4")
           // Ensure data is sorted by room number (as numbers)
           .sort((a, b) => getRoomNumber(a.name) - getRoomNumber(b.name)) as Room[]
         setRooms(roomsFromDb)
