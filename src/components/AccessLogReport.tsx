@@ -57,7 +57,7 @@ export default function AccessLogReport() {
           return {
             id: doc.id,
             description: data.description,
-            user: data.user,
+            user: data.guest_name, // Changed from data.user
             room_name: data.room_name,
             timestamp: data.timestamp,
           }
@@ -111,10 +111,17 @@ export default function AccessLogReport() {
             <TableBody>
               {accessLogs.length > 0 ? (
                 accessLogs.map((log) => {
-                  const finalDescription =
-                    log.user && log.room_name
-                      ? `El huésped ${log.user} de la habitación ${log.room_name} abrió la puerta.`
-                      : log.description || "Evento sin descripción."
+                  let finalDescription: string;
+
+                  if (log.user && log.room_name) {
+                    finalDescription = `El huésped ${log.user} de la habitación ${log.room_name} abrió la puerta.`
+                  } else if (log.user) {
+                    finalDescription = `El huésped ${log.user} abrió la puerta.`
+                  }
+                  else {
+                    finalDescription = log.description || "Evento sin descripción."
+                  }
+
 
                   return (
                     <TableRow
