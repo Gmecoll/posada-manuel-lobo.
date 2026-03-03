@@ -53,10 +53,11 @@ export default function Dashboard() {
       
       setBookings(bookingsFromDb)
 
-      const checkedIn = bookingsFromDb.filter(
-        (b) => b.status === "Checked-In" || b.status === "checked_in"
-      ).length
-      setCheckedInCount(checkedIn)
+      const checkedInGuests = bookingsFromDb
+        .filter((b) => b.status === "Checked-In" || b.status === "checked_in")
+        .reduce((sum, booking) => sum + (Number(booking.guest_count) || 1), 0);
+      
+      setCheckedInCount(checkedInGuests)
     })
     return () => unsubscribe()
   }, [])
