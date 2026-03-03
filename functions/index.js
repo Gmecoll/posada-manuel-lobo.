@@ -36,46 +36,40 @@ exports.mantenimientoHabitaciones = onSchedule({
     hoy.setHours(0, 0, 0, 0); 
     const [roomsSnap, bookingsSnap] = await Promise.all([
       db.collection("rooms").get(),
-      // Solo las reservas activas ('Checked-In') o bloqueos deben marcar una habitación como ocupada
       db.collection("bookings").where("status", "in", ["Checked-In", "Bloqueada", "checked_in"]).get(),
     ]);
 
     if (roomsSnap.empty) return null;
 
-    // Crear un mapa para asociar room_id_cloudbeds con el ID de documento de Firestore
     const roomsByCloudbedsId = new Map();
     roomsSnap.forEach(doc => {
       const roomData = doc.data();
       if (roomData.room_id_cloudbeds) {
-        roomsByCloudbedsId.set(roomData.room_id_cloudbeds, doc.id);
+        roomsByCloudbedsId.set(String(roomData.room_id_cloudbeds), doc.id);
       }
     });
 
     const occupiedRoomIds = new Set();
-    const bookingForRoom = new Map(); // Guardar la reserva que ocupa la habitación para el log
+    const bookingForRoom = new Map();
 
     bookingsSnap.forEach((doc) => {
       const booking = doc.data();
       const fechaIn = new Date(booking.check_in + "T00:00:00");
       const fechaOut = new Date(booking.check_out + "T00:00:00");
 
-      // Comprobar si la reserva está activa hoy
       if (hoy >= fechaIn && hoy < fechaOut) {
         if (Array.isArray(booking.rooms) && booking.rooms.length > 0) {
-          // Caso multi-habitación: iterar sobre el array 'rooms'
           booking.rooms.forEach(roomInfo => {
             if (roomInfo.room_id_cloudbeds) {
-              const firestoreRoomId = roomsByCloudbedsId.get(roomInfo.room_id_cloudbeds);
+              const firestoreRoomId = roomsByCloudbedsId.get(String(roomInfo.room_id_cloudbeds));
               if (firestoreRoomId) {
                 occupiedRoomIds.add(firestoreRoomId);
-                // Para el log, asociamos la reserva principal
                 bookingForRoom.set(firestoreRoomId, booking); 
               }
             }
           });
         } else if (booking.room_id_cloudbeds) {
-          // Caso legacy o habitación única
-          const firestoreRoomId = roomsByCloudbedsId.get(booking.room_id_cloudbeds);
+          const firestoreRoomId = roomsByCloudbedsId.get(String(booking.room_id_cloudbeds));
           if (firestoreRoomId) {
             occupiedRoomIds.add(firestoreRoomId);
             bookingForRoom.set(firestoreRoomId, booking);
@@ -95,11 +89,9 @@ exports.mantenimientoHabitaciones = onSchedule({
       const isOccupied = occupiedRoomIds.has(roomDoc.id);
       const newStatus = isOccupied ? "Ocupada" : "Disponible";
 
-      // Actualizar solo si el estado ha cambiado y no está en limpieza manual
       if (roomData.status !== newStatus && roomData.status !== "Limpieza") {
         updatePayload.status = newStatus;
 
-        // Crear registro de actividad para el cambio de estado
         let description;
         const booking = bookingForRoom.get(roomDoc.id);
 
@@ -118,7 +110,6 @@ exports.mantenimientoHabitaciones = onSchedule({
         });
       }
 
-      // Lógica de rotación de código de emergencia (existente)
       const pool = roomData.codes_pool;
       if (Array.isArray(pool) && pool.length > 0) {
         const nuevoCodigo = String(pool[Math.floor(Math.random() * pool.length)]);
@@ -872,4 +863,5 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
 });
 
     
+
 
