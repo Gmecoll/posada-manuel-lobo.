@@ -327,7 +327,7 @@ export function BookingRack() {
         </CardHeader>
 
         <CardContent>
-          <div className="relative overflow-x-auto border rounded-lg mt-4">
+          <div className="relative inline-block overflow-x-auto border rounded-lg mt-4">
            {isLoading ? (
              <div className="p-4">
                 <Skeleton className="h-10 w-full mb-1" />
