@@ -1,8 +1,12 @@
-
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, onSnapshot, query, orderBy, where } from "firebase/firestore"
+import {
+  collection,
+  onSnapshot,
+  query,
+  orderBy,
+} from "firebase/firestore"
 import { format } from "date-fns"
 import { es } from "date-fns/locale"
 import { ShieldCheck } from "lucide-react"
@@ -40,8 +44,8 @@ export default function AccessLogReport() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    const logsCol = collection(db, "activity_logs")
-    const q = query(logsCol, where("type", "==", "access"), orderBy("timestamp", "desc"))
+    const logsCol = collection(db, "log_puerta_principal")
+    const q = query(logsCol, orderBy("timestamp", "desc"))
 
     const unsubscribe = onSnapshot(
       q,
@@ -95,13 +99,18 @@ export default function AccessLogReport() {
             <TableHeader className="bg-slate-50/50">
               <TableRow>
                 <TableHead className="pl-6">Evento</TableHead>
-                <TableHead className="w-[200px] text-right pr-6">Fecha y Hora</TableHead>
+                <TableHead className="w-[200px] text-right pr-6">
+                  Fecha y Hora
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {accessLogs.length > 0 ? (
                 accessLogs.map((log) => (
-                  <TableRow key={log.id} className="hover:bg-slate-50 transition-colors">
+                  <TableRow
+                    key={log.id}
+                    className="hover:bg-slate-50 transition-colors"
+                  >
                     <TableCell className="font-medium pl-6 text-slate-600">
                       {log.description || "Evento sin descripción."}
                     </TableCell>
