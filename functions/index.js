@@ -442,22 +442,42 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         const hasMRZ = unifiedText.includes('<<');
 
         if (hasMRZ) {
-            isBack = true; 
-            const passportMatch = unifiedText.match(/P<[A-Z]{3}<*([A-Z]+)<<+([A-Z]+)/);
+            isBack = true;
+            
+            // Try to match standard Passport format first (P<...)
+            const passportMatch = unifiedText.match(/P<[A-Z]{3}<([A-Z<]+)<<([A-Z<]+)/);
             if (passportMatch) {
                 isPassport = true;
-                extractedLastName = passportMatch[1];
-                extractedFirstName = passportMatch[2];
+                // Last names are between country code and '<<'
+                extractedLastName = passportMatch[1].replace(/<+/g, ' ').trim();
+                // First names are after '<<'. We take the first one.
+                extractedFirstName = passportMatch[2].split('<')[0].trim();
             } else {
-                const td1SurnameMatch = unifiedText.match(/<<+[0-9O]?<*([A-Z]+)</); 
-                if (td1SurnameMatch) extractedLastName = td1SurnameMatch[1];
+                // Logic for other ID cards (non-passports)
                 
-                const td1NameMatch = unifiedText.match(/[A-Z]<<+<*([A-Z]+)(?:<|$)/);
-                if (td1NameMatch) extractedFirstName = td1NameMatch[1];
+                // First name is always after '<<'
+                const nameMatch = unifiedText.match(/<<([A-Z<]+)/);
+                if (nameMatch && nameMatch[1]) {
+                    extractedFirstName = nameMatch[1].split('<')[0].trim();
+                }
+
+                // For last name, first try the user-provided pattern: <[digit]...<<
+                const specificLastNameMatch = unifiedText.match(/<[0-9O]([A-Z<]+)<</);
+                if (specificLastNameMatch && specificLastNameMatch[1]) {
+                    extractedLastName = specificLastNameMatch[1].replace(/<+/g, ' ').trim();
+                } else {
+                    // If not found, use a general fallback for ID cards.
+                    // This pattern looks for a long ID number/string, then extracts the name.
+                    // e.g., IDUTO123456<7<<<<<<<<DOE<<JOHN
+                    const fallbackLastNameMatch = unifiedText.match(/[A-Z0-9<]{9,}<([A-Z<]+)<</);
+                    if (fallbackLastNameMatch && fallbackLastNameMatch[1]) {
+                         extractedLastName = fallbackLastNameMatch[1].replace(/<+/g, ' ').trim();
+                    }
+                }
             }
         } else {
             const frontKeywords = ['REPUBLICA', 'IDENTIDAD', 'CEDULA', 'CARTEIRA', 'DNI', 'MERCOSUR', 'DOCUMENTO', 'REGISTRO', 'ORIENTAL', 'ARGENTINA', 'BRASIL'];
-            if (frontKeywords.some(kw => unifiedText.includes(kw))) {
+            if (frontKeywords.some(kw => upperText.includes(kw))) {
                 isFront = true;
             } else {
                  return null; 
