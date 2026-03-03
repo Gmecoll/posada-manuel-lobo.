@@ -33,6 +33,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 type AccessLog = {
   id: string
   description?: string
+  user?: string
+  room_name?: string
   timestamp: {
     seconds: number
     nanoseconds: number
@@ -55,6 +57,8 @@ export default function AccessLogReport() {
           return {
             id: doc.id,
             description: data.description,
+            user: data.user,
+            room_name: data.room_name,
             timestamp: data.timestamp,
           }
         }) as AccessLog[]
@@ -106,19 +110,26 @@ export default function AccessLogReport() {
             </TableHeader>
             <TableBody>
               {accessLogs.length > 0 ? (
-                accessLogs.map((log) => (
-                  <TableRow
-                    key={log.id}
-                    className="hover:bg-slate-50 transition-colors"
-                  >
-                    <TableCell className="font-medium pl-6 text-slate-600">
-                      {log.description || "Evento sin descripción."}
-                    </TableCell>
-                    <TableCell className="text-right text-sm text-slate-400 pr-6">
-                      {formatTimestamp(log.timestamp)}
-                    </TableCell>
-                  </TableRow>
-                ))
+                accessLogs.map((log) => {
+                  const finalDescription =
+                    log.user && log.room_name
+                      ? `El huésped ${log.user} de la habitación ${log.room_name} abrió la puerta.`
+                      : log.description || "Evento sin descripción."
+
+                  return (
+                    <TableRow
+                      key={log.id}
+                      className="hover:bg-slate-50 transition-colors"
+                    >
+                      <TableCell className="font-medium pl-6 text-slate-600">
+                        {finalDescription}
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-slate-400 pr-6">
+                        {formatTimestamp(log.timestamp)}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
               ) : (
                 <TableRow>
                   <TableCell
