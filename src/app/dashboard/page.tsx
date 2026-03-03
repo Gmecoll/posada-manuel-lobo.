@@ -54,7 +54,7 @@ export default function Dashboard() {
       setBookings(bookingsFromDb)
 
       const checkedIn = bookingsFromDb.filter(
-        (b) => b.status === "Checked-In"
+        (b) => b.status === "Checked-In" || b.status === "checked_in"
       ).length
       setCheckedInCount(checkedIn)
     })
