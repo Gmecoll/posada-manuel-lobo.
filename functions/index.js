@@ -7,6 +7,8 @@ const logger = require("firebase-functions/logger");
 const admin = require('firebase-admin');
 const axios = require('axios');
 const crypto = require('crypto');
+const sharp = require('sharp');
+const { ImageAnnotatorClient } = require('@google-cloud/vision');
 
 // 2. INICIALIZACIÓN ÚNICA
 if (!admin.apps.length) {
@@ -383,14 +385,20 @@ exports.listarCerradurasTTLock = onCall({
 });
 
 // ==========================================
-// --- FUNCIÓN 7: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA + B&N ---
+// --- FUNCIÓN 7: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA + B&N (OPTIMIZADA) ---
 // ==========================================
 exports.validarDocumentoHuesped = onObjectFinalized({
     region: "us-central1",
     memory: "512MiB",
     secrets: [REPLICATE_API_TOKEN]
 }, async (event) => {
-    const filePath = event.data.name; 
+    const filePath = event.data.name;
+
+    // FIX: Check for metadata flag from the event to prevent loops
+    if (event.data.metadata && event.data.metadata.ocr_processed) {
+        console.log(`File ${filePath} has already been processed. Skipping.`);
+        return null;
+    }
     
     if (!filePath.toLowerCase().includes('doc_') || filePath.toLowerCase().includes('avatar_')) return null;
 
@@ -405,17 +413,14 @@ exports.validarDocumentoHuesped = onObjectFinalized({
     try {
         const bucket = admin.storage().bucket(event.data.bucket);
         const file = bucket.file(filePath);
-        const sharp = require('sharp');
-
+        const visionClient = new ImageAnnotatorClient();
+        
         // DESCARGAMOS EL BUFFER ORIGINAL Y CORREGIMOS ROTACIÓN EXIF
         const [originalBuffer] = await file.download();
         const buffer = await sharp(originalBuffer).rotate().toBuffer(); // AUTO-ROTATE-EXIF
 
-        const vision = require('@google-cloud/vision');
-        const visionClient = new vision.ImageAnnotatorClient();
-        
         const [result] = await visionClient.annotateImage({
-            image: { content: buffer }, // Usar el buffer corregido
+            image: { content: buffer },
             features: [ { type: 'TEXT_DETECTION' }, { type: 'FACE_DETECTION' } ]
         });
         
@@ -432,34 +437,31 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         let extractedLastName = "";
         let formattedName = "";
 
-        // ✨ 1. ANÁLISIS MRZ (NUEVA LÓGICA ANTI-ESPACIOS)
-        // Convertimos todos los espacios y saltos de línea en '<' para estandarizar el código MRZ
+        // 1. ANÁLISIS MRZ (NUEVA LÓGICA ANTI-ESPACIOS)
         const unifiedText = fullText.toUpperCase().replace(/[\s\n\r]+/g, '<');
         const hasMRZ = unifiedText.includes('<<');
 
         if (hasMRZ) {
             isBack = true; 
-            
-            // Pasaportes
             const passportMatch = unifiedText.match(/P<[A-Z]{3}<*([A-Z]+)<<+([A-Z]+)/);
             if (passportMatch) {
                 isPassport = true;
                 extractedLastName = passportMatch[1];
                 extractedFirstName = passportMatch[2];
             } else {
-                // Cédulas: Apellido (Acepta <<, números opcionales, y < adicionales)
                 const td1SurnameMatch = unifiedText.match(/<<+[0-9O]?<*([A-Z]+)</); 
                 if (td1SurnameMatch) extractedLastName = td1SurnameMatch[1];
                 
-                // Cédulas: Nombre (Busca letras seguidas de <<, y frena en el próximo <)
                 const td1NameMatch = unifiedText.match(/[A-Z]<<+<*([A-Z]+)(?:<|$)/);
                 if (td1NameMatch) extractedFirstName = td1NameMatch[1];
             }
         } else {
             const frontKeywords = ['REPUBLICA', 'IDENTIDAD', 'CEDULA', 'CARTEIRA', 'DNI', 'MERCOSUR', 'DOCUMENTO', 'REGISTRO', 'ORIENTAL', 'ARGENTINA', 'BRASIL'];
-            const foundKeywords = frontKeywords.filter(kw => unifiedText.includes(kw));
-            if (foundKeywords.length > 0) isFront = true;
-            else return null; 
+            if (frontKeywords.some(kw => unifiedText.includes(kw))) {
+                isFront = true;
+            } else {
+                 return null; 
+            }
         }
 
         const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
@@ -467,20 +469,17 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             formattedName = `${capitalize(extractedFirstName)} ${capitalize(extractedLastName)}`.trim();
         }
 
-        // 2. LÓGICA DE ROTACIÓN INTELIGENTE (SIMPLIFICADA)
+        // 2. LÓGICA DE ROTACIÓN INTELIGENTE
         let imageRotationAngle = 0;
         const metadata = await sharp(buffer).metadata();
-
-        // Solo aplicamos rotación inteligente para el anverso o pasaportes que contengan un rostro.
-        // Se elimina el fallback por texto para evitar los errores de orientación incorrecta en el dorso.
         if ((isFront || isPassport) && result.faceAnnotations && result.faceAnnotations.length > 0) {
             const roll = result.faceAnnotations[0].rollAngle;
-            if (roll > 45 && roll <= 135) imageRotationAngle = -90; // Rotado a la izquierda, corregir a la derecha
-            else if (roll < -45 && roll >= -135) imageRotationAngle = 90; // Rotado a la derecha, corregir a la izquierda
-            else if (roll > 135 || roll < -135) imageRotationAngle = 180; // Al revés
+            if (roll > 45 && roll <= 135) imageRotationAngle = -90;
+            else if (roll < -45 && roll >= -135) imageRotationAngle = 90;
+            else if (roll > 135 || roll < -135) imageRotationAngle = 180;
         }
         
-        // ✨ 3. RECORTE Y GUARDADO DEL DOCUMENTO (CON PADDING Y ANTI-CACHÉ)
+        // 3. RECORTE Y GUARDADO DEL DOCUMENTO
         let document_image_url = "";
         let finalDocBuffer = buffer;
         const docBoundary = result.textAnnotations?.[0]?.boundingPoly;
@@ -496,8 +495,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             
             const w = xMax - xMin;
             const h = yMax - yMin;
-
-            // Añadimos un 5% de margen para que no quede cortado muy al ras
             const padX = Math.floor(w * 0.05);
             const padY = Math.floor(h * 0.05);
 
@@ -507,9 +504,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             const cropH = Math.min(metadata.height - cropY, h + padY * 2);
 
             if (cropW > 50 && cropH > 50) {
-              finalDocBuffer = await sharp(finalDocBuffer)
-                  .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
-                  .toBuffer();
+              finalDocBuffer = await sharp(finalDocBuffer).extract({ left: cropX, top: cropY, width: cropW, height: cropH }).toBuffer();
               needsSave = true;
             }
         }
@@ -521,30 +516,28 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 
         if (needsSave) {
             try {
-                console.log('Guardando documento procesado (recortado/rotado)...');
                 const finalProcessedBuffer = await sharp(finalDocBuffer).jpeg({ quality: 90 }).toBuffer();
-                const crypto = require('crypto');
-                
-                // Generamos un NUEVO token para "romper" la caché del navegador
                 const newToken = crypto.randomUUID();
                 
                 await file.save(finalProcessedBuffer, {
                     metadata: { 
                         contentType: 'image/jpeg',
-                        metadata: { firebaseStorageDownloadTokens: newToken }
+                        metadata: { firebaseStorageDownloadTokens: newToken, ocr_processed: 'true' }
                     }
                 });
                 document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${newToken}`;
             } catch (procErr) {
                 console.error("Error al guardar el documento procesado:", procErr);
                 const [originalMetadata] = await file.getMetadata();
-                let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || require('crypto').randomUUID();
+                let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || crypto.randomUUID();
                 document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token.split(',')[0]}`;
             }
         } else {
              const [originalMetadata] = await file.getMetadata();
-             let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || require('crypto').randomUUID();
+             let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || crypto.randomUUID();
              document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token.split(',')[0]}`;
+             // Mark as processed even if no changes to content to prevent re-runs
+             await file.setMetadata({ metadata: { ...(originalMetadata.metadata || {}), ocr_processed: 'true' }});
         }
 
 
@@ -561,21 +554,21 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 const yMin = Math.min(...ys);
                 const yMax = Math.max(...ys);
 
-                let width = xMax - xMin;
-                let height = yMax - yMin;
-                const padX = Math.floor(width * 0.30); 
-                const padY = Math.floor(height * 0.40);
-
-                const finalX = Math.max(0, xMin - padX);
-                const finalY = Math.max(0, yMin - padY);
-                const finalW = width + (padX * 2);
-                const finalH = height + (padY * 2);
+                // FIX: Centered, square crop logic
+                const width = xMax - xMin;
+                const height = yMax - yMin;
+                const centerX = xMin + width / 2;
+                const centerY = yMin + height / 2;
+                const size = Math.max(width, height) * 1.5; // 50% padding around the largest dimension
                 
-                const cropW = Math.min(finalW, metadata.width - finalX);
-                const cropH = Math.min(finalH, metadata.height - finalY);
+                const cropLeft = Math.floor(Math.max(0, centerX - size / 2));
+                const cropTop = Math.floor(Math.max(0, centerY - size / 2));
+                
+                const cropWidth = Math.floor(Math.min(size, metadata.width - cropLeft));
+                const cropHeight = Math.floor(Math.min(size, metadata.height - cropTop));
 
                 const croppedBuffer = await sharp(buffer)
-                    .extract({ left: finalX, top: finalY, width: cropW, height: cropH })
+                    .extract({ left: cropLeft, top: cropTop, width: cropWidth, height: cropHeight })
                     .rotate(imageRotationAngle) 
                     .jpeg({ quality: 95 })
                     .toBuffer();
@@ -583,7 +576,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 let avatarBufferToSave = croppedBuffer;
 
                 try {
-                    const axios = require('axios');
                     const token = REPLICATE_API_TOKEN.value();
                     if (token) {
                         const base64Image = `data:image/jpeg;base64,${croppedBuffer.toString('base64')}`;
@@ -607,7 +599,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 } catch (iaError) { console.error("Error Replicate:", iaError.message); }
 
                 const finalBnWBuffer = await sharp(avatarBufferToSave).grayscale().jpeg({ quality: 90 }).toBuffer();
-                const crypto = require('crypto');
                 const avatarToken = crypto.randomUUID();
                 const avatarPath = `checkins/${cleanId}/avatar_${guestIndex}.jpg`;
                 const avatarFile = bucket.file(avatarPath);
