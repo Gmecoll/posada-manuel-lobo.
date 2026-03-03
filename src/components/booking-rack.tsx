@@ -298,15 +298,14 @@ export function BookingRack() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-start gap-6 pb-2">
-          <div className="space-y-1">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between pb-2">
+           <div className="space-y-1">
             <CardTitle className="font-headline">Rack de Reservas</CardTitle>
             <CardDescription>
               Visualización de la ocupación para el período seleccionado.
             </CardDescription>
           </div>
-          
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 self-start sm:self-center">
             <Tabs defaultValue="30" onValueChange={(value) => setViewRange(Number(value))} className="w-auto">
               <TabsList>
                 <TabsTrigger value="1">1D</TabsTrigger>
@@ -336,9 +335,9 @@ export function BookingRack() {
              </div>
            ) : (
             <div
-              className="grid bg-border -m-px"
+              className="inline-grid bg-border -m-px"
               style={{
-                gridTemplateColumns: `minmax(150px, auto) repeat(${days.length}, ${cellWidth})`,
+                gridTemplateColumns: `160px repeat(${days.length}, ${cellWidth})`,
               }}
             >
               {/* Header */}
