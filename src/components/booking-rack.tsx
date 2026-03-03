@@ -1,3 +1,4 @@
+
 "use client"
 
 import React, { useState, useEffect } from "react"
@@ -288,16 +289,16 @@ export function BookingRack() {
   }
 
   const getCellWidth = (range: number) => {
-    if (range <= 1) return 'minmax(300px, 1fr)';
-    if (range <= 7) return 'minmax(100px, 1fr)';
-    return 'minmax(60px, 1fr)';
+    if (range <= 1) return '300px';
+    if (range <= 7) return '100px';
+    return '60px';
   };
   const cellWidth = getCellWidth(viewRange);
 
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-start gap-6 pb-2">
           <div className="space-y-1">
             <CardTitle className="font-headline">Rack de Reservas</CardTitle>
             <CardDescription>
@@ -305,7 +306,7 @@ export function BookingRack() {
             </CardDescription>
           </div>
           
-          <div className="flex flex-col-reverse sm:flex-row items-end sm:items-center gap-2">
+          <div className="flex items-center gap-2">
             <Tabs defaultValue="30" onValueChange={(value) => setViewRange(Number(value))} className="w-auto">
               <TabsList>
                 <TabsTrigger value="1">1D</TabsTrigger>
@@ -337,7 +338,7 @@ export function BookingRack() {
             <div
               className="grid bg-border -m-px"
               style={{
-                gridTemplateColumns: `minmax(150px, 1fr) repeat(${days.length}, ${cellWidth})`,
+                gridTemplateColumns: `minmax(150px, auto) repeat(${days.length}, ${cellWidth})`,
               }}
             >
               {/* Header */}
