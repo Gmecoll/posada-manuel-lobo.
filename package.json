@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@anam-ai/js-sdk": "^4.8.0",
+    "@elevenlabs/react": "^0.14.1",
     "@google-cloud/storage": "^7.19.0",
     "@google-cloud/vision": "^5.3.4",
     "@heygen/streaming-avatar": "^2.1.0",

@@ -61,10 +61,25 @@ exports.mantenimientoHabitaciones = onSchedule({
 
       // Comprobar si la reserva está activa hoy
       if (hoy >= fechaIn && hoy < fechaOut) {
-        const firestoreRoomId = roomsByCloudbedsId.get(booking.room_id_cloudbeds);
-        if (firestoreRoomId) {
-          occupiedRoomIds.add(firestoreRoomId);
-          bookingForRoom.set(firestoreRoomId, doc.data()); // Guardamos el objeto booking completo
+        if (Array.isArray(booking.rooms) && booking.rooms.length > 0) {
+          // Caso multi-habitación: iterar sobre el array 'rooms'
+          booking.rooms.forEach(roomInfo => {
+            if (roomInfo.room_id_cloudbeds) {
+              const firestoreRoomId = roomsByCloudbedsId.get(roomInfo.room_id_cloudbeds);
+              if (firestoreRoomId) {
+                occupiedRoomIds.add(firestoreRoomId);
+                // Para el log, asociamos la reserva principal
+                bookingForRoom.set(firestoreRoomId, booking); 
+              }
+            }
+          });
+        } else if (booking.room_id_cloudbeds) {
+          // Caso legacy o habitación única
+          const firestoreRoomId = roomsByCloudbedsId.get(booking.room_id_cloudbeds);
+          if (firestoreRoomId) {
+            occupiedRoomIds.add(firestoreRoomId);
+            bookingForRoom.set(firestoreRoomId, booking);
+          }
         }
       }
     });
@@ -857,3 +872,4 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
 });
 
     
+
