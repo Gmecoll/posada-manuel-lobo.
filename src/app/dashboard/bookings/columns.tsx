@@ -10,6 +10,7 @@ import {
   Trash2,
   Pencil,
   ArrowUpDown,
+  Users,
 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -136,6 +137,29 @@ export const getColumns = ({
       return roomNameA.localeCompare(roomNameB)
     },
   },
+  {
+    accessorKey: "guest_count",
+    header: ({ column }) => {
+      return (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        >
+          Huéspedes
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      )
+    },
+    cell: ({ row }) => {
+      const count = row.original.guest_count || 1;
+      return (
+        <div className="flex items-center justify-start gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span>{count}</span>
+        </div>
+      )
+    },
+},
   {
     accessorKey: "check_in",
     header: ({ column }) => {

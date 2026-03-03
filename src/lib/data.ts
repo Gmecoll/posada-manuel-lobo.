@@ -36,6 +36,7 @@ export type Booking = {
   check_out: string;
   status: 'Confirmed' | 'Checked-In' | 'Checked-Out' | 'Cancelled' | 'Bloqueada' | 'checked_in';
   access_enabled: boolean;
+  guest_count?: number;
   document_status?: 'pending' | 'approved' | 'manual_review' | 'not_uploaded' | 'pending_review';
   document_url?: string;
   ocr_text?: string;

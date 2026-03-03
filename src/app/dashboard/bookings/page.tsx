@@ -103,6 +103,7 @@ export default function BookingsPage() {
             status: docData.status,
             access_enabled: docData.access_enabled,
             rooms: docData.rooms,
+            guest_count: docData.guest_count,
           } as Booking
         })
 
