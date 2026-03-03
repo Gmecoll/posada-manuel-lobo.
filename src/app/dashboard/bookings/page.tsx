@@ -47,6 +47,16 @@ export default function BookingsPage() {
 
   const { toast } = useToast()
 
+  // Forzamos la limpieza del DOM para evitar bloqueos del modal
+  useEffect(() => {
+    if (!isBookingDialogOpen) {
+      document.body.style.pointerEvents = ''
+    }
+    return () => {
+      document.body.style.pointerEvents = ''
+    }
+  }, [isBookingDialogOpen])
+
   useEffect(() => {
     const roomsCol = collection(db, "rooms")
     const unsubscribe = onSnapshot(
