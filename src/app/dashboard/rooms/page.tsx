@@ -1,7 +1,6 @@
-
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   collection,
   doc,
@@ -40,11 +39,10 @@ const statusColors: Record<string, string> = {
 }
 
 const getRoomNumber = (name: string) => {
-  if (!name) return 0;
-  const match = name.match(/\d+/);
-  return match ? parseInt(match[0], 10) : 0;
-};
-
+  if (!name) return 0
+  const match = name.match(/\d+/)
+  return match ? parseInt(match[0], 10) : 0
+}
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<Room[]>([])
@@ -61,10 +59,7 @@ export default function RoomsPage() {
             ...doc.data(),
           }))
           // Ensure data is sorted by room number (as numbers)
-          .sort(
-            (a, b) =>
-              getRoomNumber(a.name) - getRoomNumber(b.name)
-          ) as Room[]
+          .sort((a, b) => getRoomNumber(a.name) - getRoomNumber(b.name)) as Room[]
         setRooms(roomsFromDb)
       },
       (error) => {
@@ -75,6 +70,25 @@ export default function RoomsPage() {
 
     return () => unsubscribe()
   }, [])
+
+  const groupedRooms = useMemo(() => {
+    return rooms.reduce(
+      (acc, room) => {
+        const category = room.type_name || "Sin Categoría"
+        if (!acc[category]) {
+          acc[category] = []
+        }
+        acc[category].push(room)
+        return acc
+      },
+      {} as Record<string, Room[]>
+    )
+  }, [rooms])
+
+  const sortedCategories = useMemo(
+    () => Object.keys(groupedRooms).sort(),
+    [groupedRooms]
+  )
 
   const handleStatusChange = async (
     roomId: string,
@@ -122,95 +136,110 @@ export default function RoomsPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {rooms.map((room) => (
-            <Card key={room.id} className="flex flex-col">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle>Habitación {room.name}</CardTitle>
-                    <CardDescription>{room.type_name}</CardDescription>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="-mt-1 -mr-2 h-8 w-8"
-                      >
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => handleStatusChange(room.id, "Disponible")}
-                      >
-                        Marcar Disponible
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleStatusChange(room.id, "Ocupada")}
-                      >
-                        Marcar Ocupada
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => handleStatusChange(room.id, "Limpieza")}
-                      >
-                        Marcar en Limpieza
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-grow">
-                <Badge
-                  className={cn(
-                    "text-sm font-semibold",
-                    statusColors[room.status]
-                  )}
-                  variant="outline"
-                >
-                  {room.status}
-                </Badge>
-              </CardContent>
-              <CardFooter className="flex-col items-start gap-4 pt-6">
-                <div className="w-full">
-                  <p className="text-xs text-muted-foreground">
-                    Cód. Cerradura
-                  </p>
-                  <p
-                    className={cn(
-                      "font-mono text-base font-bold tracking-wider",
-                      !room.lockId || room.lockId === "Sin Definir"
-                        ? "text-muted-foreground"
-                        : "text-foreground"
-                    )}
-                  >
-                    {room.lockId || "Sin Definir"}
-                  </p>
-                </div>
-
-                {room.codes_pool && room.codes_pool.length > 0 && (
-                  <div className="w-full pt-4 mt-4 border-t">
-                    <p className="text-xs text-muted-foreground">
-                      Cód. Emergencia
-                    </p>
-                    <p className="font-mono text-xl font-bold tracking-widest">
-                      {room.backup_code}
-                    </p>
-                    {room.last_rotation && (
-                      <p className="text-xs text-muted-foreground">
-                        Rotado:{" "}
-                        {format(
-                          new Date(room.last_rotation.seconds * 1000),
-                          "dd/MM/yy HH:mm'hs'",
-                          { locale: es }
+        <div className="space-y-8">
+          {sortedCategories.map((category) => (
+            <div key={category}>
+              <h2 className="mb-4 border-b pb-2 font-headline text-xl font-semibold text-slate-700">
+                {category}
+              </h2>
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {groupedRooms[category].map((room) => (
+                  <Card key={room.id} className="flex flex-col">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle>Habitación {room.name}</CardTitle>
+                          <CardDescription>{room.type_name}</CardDescription>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="-mt-1 -mr-2 h-8 w-8"
+                            >
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleStatusChange(room.id, "Disponible")
+                              }
+                            >
+                              Marcar Disponible
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleStatusChange(room.id, "Ocupada")
+                              }
+                            >
+                              Marcar Ocupada
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleStatusChange(room.id, "Limpieza")
+                              }
+                            >
+                              Marcar en Limpieza
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="flex-grow">
+                      <Badge
+                        className={cn(
+                          "text-sm font-semibold",
+                          statusColors[room.status]
                         )}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </CardFooter>
-            </Card>
+                        variant="outline"
+                      >
+                        {room.status}
+                      </Badge>
+                    </CardContent>
+                    <CardFooter className="flex-col items-start gap-4 pt-6">
+                      <div className="w-full">
+                        <p className="text-xs text-muted-foreground">
+                          Cód. Cerradura
+                        </p>
+                        <p
+                          className={cn(
+                            "font-mono text-base font-bold tracking-wider",
+                            !room.lockId || room.lockId === "Sin Definir"
+                              ? "text-muted-foreground"
+                              : "text-foreground"
+                          )}
+                        >
+                          {room.lockId || "Sin Definir"}
+                        </p>
+                      </div>
+
+                      {room.codes_pool && room.codes_pool.length > 0 && (
+                        <div className="mt-4 w-full border-t pt-4">
+                          <p className="text-xs text-muted-foreground">
+                            Cód. Emergencia
+                          </p>
+                          <p className="font-mono text-xl font-bold tracking-widest">
+                            {room.backup_code}
+                          </p>
+                          {room.last_rotation && (
+                            <p className="text-xs text-muted-foreground">
+                              Rotado:{" "}
+                              {format(
+                                new Date(room.last_rotation.seconds * 1000),
+                                "dd/MM/yy HH:mm'hs'",
+                                { locale: es }
+                              )}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}
