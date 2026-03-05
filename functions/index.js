@@ -398,6 +398,7 @@ exports.listarCerradurasTTLock = onCall({
 // --- FUNCIÓN 7: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA + B&N (OPTIMIZADA) ---
 // ==========================================
 exports.validarDocumentoHuesped = onObjectFinalized({
+    bucket: "studio-4343626376-fea63.firebasestorage.app", 
     region: "us-central1",
     memory: "512MiB",
     secrets: [REPLICATE_API_TOKEN]
@@ -968,69 +969,60 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
 });
 
 // ==========================================
-// --- FUNCIÓN 10: INTEGRACIÓN PLEXO (Testing) ---
+// --- FUNCIÓN 10: PLEXO (Versión API REST Moderna) ---
 // ==========================================
 exports.crearPagoPlexo = onCall({
     region: "us-central1",
     cors: true
 }, async (request) => {
     const data = request.data || {};
-    const { bookingId = "TEST-001", amount = 1500, currency = "UYU" } = data;
-
+    const bookingId = data.bookingId ? String(data.bookingId) : "TEST-001";
+    const amount = data.amount ? parseFloat(data.amount) : 1500.0;
+    
     try {
-        // 1. Cargamos la llave privada LIMPIA que extrajimos con la terminal
-        const pemPath = path.join(__dirname, 'private_key.pem');
-        const privateKey = fs.readFileSync(pemPath, 'utf8');
+        // 1. TU LLAVE MAESTRA (Pegá acá tu API Secret completo)
+        const PLEXO_API_SECRET = "95420PEGAR_EL_RESTO_DEL_CODIGO_AQUI"; 
 
-        // 2. Fingerprint limpio
-        const PLEXO_FINGERPRINT = "A730BD63766B54048F8F9A2FCCB9BD42802D71ED"; 
-
-        // 3. Armamos los datos de la reserva
-        const requestInterno = {
-            Action: 35, 
+        // 2. EL PAYLOAD LIMPIO (Lo que el banco necesita saber)
+        const payload = {
+            Amount: amount,
+            Currency: "UYU",
             ClientInformation: {
-                Name: "Huesped Prueba SkyRooms", 
+                Name: "Huesped de Prueba", 
                 Email: "test@skyrooms.uy",
             },
             MetaReference: bookingId,
-            RedirectUri: "https://skyrooms.uy/pago-exitoso" 
+            RedirectUri: "https://skyrooms.uy/"
         };
 
-        // 4. Estructura de "Objeto Firmado"
-        const objetoAFirmar = {
-            Fingerprint: PLEXO_FINGERPRINT,
-            Object: {
-                Client: "SkyRoomsTest",
-                Request: requestInterno
-            },
-            UTCUnixTimeExpiration: Date.now() + 120000 
-        };
+        // 3. INTENTO DE RUTA REST (Basado en la estructura de Plexo)
+        // Usualmente las API REST están en api.plexo o similar. Probaremos esta primero:
+        const PLEXO_API_URL = "https://api.testing.plexo.com.uy/v1/Authorize";
 
-        const jsonCanonizado = JSON.stringify(objetoAFirmar);
+        console.log("Enviando petición REST a Plexo...");
 
-        // 5. Firmamos el paquete usando la llave PEM directamente (Cero problemas con Node 20)
-        const sign = crypto.createSign('SHA512');
-        sign.update(jsonCanonizado);
-        const signature = sign.sign({ 
-            key: privateKey, 
-            padding: crypto.constants.RSA_PKCS1_PADDING 
-        }, 'base64');
+        // 4. EL ENVÍO (Mirá qué simple es sin la firma)
+        const response = await axios.post(PLEXO_API_URL, payload, {
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${PLEXO_API_SECRET}` // Acá va tu llave
+            }
+        });
 
-        // 6. El paquete final cifrado
-        const payloadFinal = {
-            Object: objetoAFirmar,
-            Signature: signature
-        };
+        console.log("¡Respuesta REST de Plexo!", JSON.stringify(response.data));
 
-        // 7. Disparamos a la API de Sandbox de Plexo
-        const PLEXO_API_URL = "https://testing.plexo.com.uy/SecurePaymentGateway.svc/Authorize";
-        const response = await axios.post(PLEXO_API_URL, payloadFinal);
-
-        console.log("¡Pago de prueba generado con éxito!", response.data);
-        return { success: true, payment_url: response.data.RedirectUrl };
+        if (response.data && response.data.RedirectUrl) {
+            return { success: true, payment_url: response.data.RedirectUrl };
+        } else {
+            return { success: false, error: "Faltó la URL en la respuesta" };
+        }
 
     } catch (error) {
-        console.error("Error criptográfico conectando con Plexo:", error.response ? error.response.data : error.message);
-        throw new HttpsError('internal', "No se pudo generar el pago seguro con Plexo");
+        // En REST, los errores nos hablan claro. Vamos a imprimirlo:
+        const status = error.response ? error.response.status : "No status";
+        const errorData = error.response && error.response.data ? JSON.stringify(error.response.data) : error.message;
+        
+        console.error(`Error REST en Plexo (Status: ${status}):`, errorData);
+        throw new HttpsError('internal', `Plexo rechazó la solicitud REST: ${errorData}`);
     }
 });
