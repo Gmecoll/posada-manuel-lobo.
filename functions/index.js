@@ -1,4 +1,6 @@
+// ==========================================
 // 1. IMPORTACIONES ÚNICAS
+// ==========================================
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
@@ -9,14 +11,20 @@ const axios = require('axios');
 const crypto = require('crypto');
 const sharp = require('sharp');
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
+const fs = require('fs'); // Agregado para Plexo
+const path = require('path'); // Agregado para Plexo
 
+// ==========================================
 // 2. INICIALIZACIÓN ÚNICA
+// ==========================================
 if (!admin.apps.length) {
     admin.initializeApp();
 }
 const db = admin.firestore();
 
+// ==========================================
 // 3. CONFIGURACIONES Y SECRETOS
+// ==========================================
 const ADMIN_EMAIL = "gmecollg@gmail.com";
 const MERCADO_PAGO_ACCESS_TOKEN = defineSecret('MERCADO_PAGO_ACCESS_TOKEN');
 const CLOUDBEDS_CLIENT_ID = defineSecret("CLOUDBEDS_CLIENT_ID");
@@ -24,6 +32,7 @@ const CLOUDBEDS_CLIENT_SECRET = defineSecret("CLOUDBEDS_CLIENT_SECRET");
 const TTLOCK_CLIENT_ID = defineSecret("TTLOCK_CLIENT_ID");
 const TTLOCK_CLIENT_SECRET = defineSecret("TTLOCK_CLIENT_SECRET");
 const REPLICATE_API_TOKEN = defineSecret("REPLICATE_API_TOKEN");
+
 // ==========================================
 // --- FUNCIÓN 1: INICIAR PAGO SERVICIO (MERCADO PAGO) ---
 // ==========================================
@@ -102,6 +111,7 @@ exports.iniciarPagoServicio = onCall({
         throw new HttpsError('internal', error.message);
     }
 });
+
 // ==========================================
 // --- FUNCIÓN 2: MANTENIMIENTO ---
 // ==========================================
@@ -515,8 +525,8 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             
             const w = xMax - xMin;
             const h = yMax - yMin;
-            const padX = Math.floor(w * 0.05);
-            const padY = Math.floor(h * 0.05);
+            const padX = Math.floor(w * 0.1);
+            const padY = Math.floor(h * 0.1);
 
             const cropX = Math.max(0, xMin - padX);
             const cropY = Math.max(0, yMin - padY);
@@ -725,10 +735,10 @@ exports.validarDocumentoHuesped = onObjectFinalized({
     } catch (e) { console.error("OCR Error:", e); }
     return null;
 });
+
 // ==========================================
 // --- FUNCIÓN 8: Cloudbeds ---
 // ==========================================
-
 exports.testSincronizarCloudbeds = onRequest({
     region: "us-central1"
 }, async (req, res) => {
@@ -862,7 +872,7 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
                 room_id_cloudbeds: room.roomID || null,
                 room_name: room.roomName || "No asignada",
                 lock_id: lockId,
-                guest_count: roomGuests // ✨ NUEVO: Huéspedes específicos de esta habitación
+                guest_count: roomGuests 
             });
         }
 
@@ -913,7 +923,6 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
-        // Cloudbeds devuelve un array de propiedades, tomamos la primera
         const properties = roomsResponse.data.data;
         if (!properties || properties.length === 0) {
              return res.status(200).send("No se encontraron propiedades.");
@@ -958,4 +967,70 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
     }
 });
 
-    
+// ==========================================
+// --- FUNCIÓN 10: INTEGRACIÓN PLEXO (Testing) ---
+// ==========================================
+exports.crearPagoPlexo = onCall({
+    region: "us-central1",
+    cors: true
+}, async (request) => {
+    const data = request.data || {};
+    const { bookingId = "TEST-001", amount = 1500, currency = "UYU" } = data;
+
+    try {
+        // 1. Cargamos la llave privada LIMPIA que extrajimos con la terminal
+        const pemPath = path.join(__dirname, 'private_key.pem');
+        const privateKey = fs.readFileSync(pemPath, 'utf8');
+
+        // 2. Fingerprint limpio
+        const PLEXO_FINGERPRINT = "A730BD63766B54048F8F9A2FCCB9BD42802D71ED"; 
+
+        // 3. Armamos los datos de la reserva
+        const requestInterno = {
+            Action: 35, 
+            ClientInformation: {
+                Name: "Huesped Prueba SkyRooms", 
+                Email: "test@skyrooms.uy",
+            },
+            MetaReference: bookingId,
+            RedirectUri: "https://skyrooms.uy/pago-exitoso" 
+        };
+
+        // 4. Estructura de "Objeto Firmado"
+        const objetoAFirmar = {
+            Fingerprint: PLEXO_FINGERPRINT,
+            Object: {
+                Client: "SkyRoomsTest",
+                Request: requestInterno
+            },
+            UTCUnixTimeExpiration: Date.now() + 120000 
+        };
+
+        const jsonCanonizado = JSON.stringify(objetoAFirmar);
+
+        // 5. Firmamos el paquete usando la llave PEM directamente (Cero problemas con Node 20)
+        const sign = crypto.createSign('SHA512');
+        sign.update(jsonCanonizado);
+        const signature = sign.sign({ 
+            key: privateKey, 
+            padding: crypto.constants.RSA_PKCS1_PADDING 
+        }, 'base64');
+
+        // 6. El paquete final cifrado
+        const payloadFinal = {
+            Object: objetoAFirmar,
+            Signature: signature
+        };
+
+        // 7. Disparamos a la API de Sandbox de Plexo
+        const PLEXO_API_URL = "https://testing.plexo.com.uy/SecurePaymentGateway.svc/Authorize";
+        const response = await axios.post(PLEXO_API_URL, payloadFinal);
+
+        console.log("¡Pago de prueba generado con éxito!", response.data);
+        return { success: true, payment_url: response.data.RedirectUrl };
+
+    } catch (error) {
+        console.error("Error criptográfico conectando con Plexo:", error.response ? error.response.data : error.message);
+        throw new HttpsError('internal', "No se pudo generar el pago seguro con Plexo");
+    }
+});
