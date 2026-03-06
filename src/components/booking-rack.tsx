@@ -131,7 +131,7 @@ export function BookingRack() {
             return data.rooms.map((roomData: any) => {
               const room = roomData.room_id_cloudbeds ? roomsMap.get(String(roomData.room_id_cloudbeds)) : null;
               return {
-                id: `${'doc.id'}-${roomData.room_id_cloudbeds}`, 
+                id: `${doc.id}-${roomData.room_id_cloudbeds}`, 
                 docId: doc.id,
                 ...data,
                 roomId: room ? room.id : '',
@@ -332,7 +332,7 @@ export function BookingRack() {
             <div
               className="inline-grid bg-border -m-px"
               style={{
-                gridTemplateColumns: `160px repeat(${'days.length'}, ${cellWidth})`,
+                gridTemplateColumns: `160px repeat(${days.length}, ${cellWidth})`,
               }}
             >
               {/* Header */}
@@ -368,7 +368,7 @@ export function BookingRack() {
                   {/* Day Cells for the room */}
                   {days.map((day, dayIndex) => (
                     <div
-                      key={`${'room.id'}-${day.toString()}`}
+                      key={`${room.id}-${day.toString()}`}
                       style={{
                         gridRow: roomIndex + 2,
                         gridColumn: dayIndex + 2,
