@@ -11,8 +11,8 @@ const axios = require('axios');
 const crypto = require('crypto');
 const sharp = require('sharp');
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
-const fs = require('fs'); // Agregado para Plexo
-const path = require('path'); // Agregado para Plexo
+const fs = require('fs');
+const path = require('path');
 
 // ==========================================
 // 2. INICIALIZACIÓN ÚNICA
@@ -46,11 +46,9 @@ exports.iniciarPagoServicio = onCall({
     try {
         const data = request.data;
         
-        // 1. Configurar cliente de MP
         const client = new MercadoPagoConfig({ accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN });
         const preference = new Preference(client);
         
-        // 2. Armar la preferencia de Mercado Pago
         const preferenceData = {
             body: {
                 items: [{
@@ -72,7 +70,6 @@ exports.iniciarPagoServicio = onCall({
 
         const prefResponse = await preference.create(preferenceData);
 
-        // 3. Registrar en Firestore (Colección orders)
         const orderRef = await db.collection('orders').add({
             serviceId: data.serviceId || "",
             title: data.title || "Servicio Sky Rooms",
@@ -87,7 +84,6 @@ exports.iniciarPagoServicio = onCall({
             createdAt: admin.firestore.FieldValue.serverTimestamp()
         });
 
-        // 4. Webhook a Make.com
         try {
             await axios.post("https://hook.us2.make.com/8v6qga9kx9sm3ef488yl664aw8uceeub", {
                 orderId: orderRef.id,
@@ -284,11 +280,11 @@ exports.obtenerTokenTTLock = onCall({
 });
 
 // ==========================================
-// --- FUNCIÓN 5: APERTURA INTELIGENTE (CORREGIDA) ---
+// --- FUNCIÓN 5: APERTURA INTELIGENTE CON RENOVACIÓN AUTO ---
 // ==========================================
 exports.abrirCerraduraRemote = onCall({ 
     region: "us-central1", 
-    secrets: ["TTLOCK_CLIENT_ID"]
+    secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_CLIENT_SECRET"]
 }, async (request) => {
     const { booking_id, lockId: adminLockId } = request.data;
     const email = request.auth ? request.auth.token.email : "";
@@ -300,7 +296,7 @@ exports.abrirCerraduraRemote = onCall({
 
     if (!booking_id) throw new HttpsError('invalid-argument', 'Falta booking_id.');
 
-    // 2. BÚSQUEDA DIRECTA POR ID DE DOCUMENTO (Elimina el error de "Reserva no encontrada")
+    // 2. BÚSQUEDA DIRECTA POR ID DE DOCUMENTO
     const bookingRef = db.collection('bookings').doc(String(booking_id).trim());
     const docSnap = await bookingRef.get();
 
@@ -330,19 +326,59 @@ exports.abrirCerraduraRemote = onCall({
     return await llamarTTLock(lockIdReal, bData.guest_name || "Huésped", `Apertura por huésped Hab ${bData.room_name || 'S/D'}`);
 });
 
-// HELPER TTLOCK
+// HELPER TTLOCK (CON AUTO-REFRESH INTEGRADO)
 async function llamarTTLock(lockId, userIdentifier, logDescription) {
-    const authDoc = await db.collection('configuracion_sistema').doc('ttlock_auth').get();
-    const token = authDoc.data()?.accessToken;
+    const authRef = db.collection('configuracion_sistema').doc('ttlock_auth');
+    const authDoc = await authRef.get();
+    let { accessToken, refreshToken } = authDoc.data() || {};
     
-    const response = await axios.post('https://api.ttlock.com/v3/lock/unlock', null, {
+    if (!accessToken) return { success: false, error: "No hay token de TTLock configurado." };
+
+    let response = await axios.post('https://api.ttlock.com/v3/lock/unlock', null, {
         params: {
             clientId: process.env.TTLOCK_CLIENT_ID,
-            accessToken: token,
+            accessToken: accessToken,
             lockId: lockId,
             date: Date.now()
         }
     });
+
+    // AUTO-RENOVACIÓN: Si el token venció (errcode 10003), lo renovamos en caliente
+    if (response.data.errcode === 10003 && refreshToken) {
+        console.log("Token de TTLock vencido. Intentando renovación automática...");
+        try {
+            const refreshParams = new URLSearchParams({
+                client_id: process.env.TTLOCK_CLIENT_ID,
+                client_secret: process.env.TTLOCK_CLIENT_SECRET,
+                refresh_token: refreshToken,
+                grant_type: 'refresh_token'
+            });
+            const refreshRes = await axios.post('https://api.ttlock.com/oauth2/token', refreshParams);
+            
+            if (refreshRes.data.access_token) {
+                accessToken = refreshRes.data.access_token;
+                // Guardamos el nuevo token
+                await authRef.update({ 
+                    accessToken, 
+                    refreshToken: refreshRes.data.refresh_token, 
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp() 
+                });
+                
+                console.log("Token renovado con éxito. Reintentando apertura...");
+                // Reintentamos la apertura original con el token nuevo
+                response = await axios.post('https://api.ttlock.com/v3/lock/unlock', null, {
+                    params: {
+                        clientId: process.env.TTLOCK_CLIENT_ID,
+                        accessToken: accessToken,
+                        lockId: lockId,
+                        date: Date.now()
+                    }
+                });
+            }
+        } catch (refreshError) {
+            console.error("Error al intentar renovar el token de TTLock:", refreshError.message);
+        }
+    }
 
     if (response.data.errcode === 0) {
         await db.collection('activity_logs').add({
@@ -353,49 +389,12 @@ async function llamarTTLock(lockId, userIdentifier, logDescription) {
         });
         return { success: true };
     }
-    return { success: false, error: response.data.errmsg };
+    return { success: false, error: response.data.errmsg || "Error desconocido de la cerradura" };
 }
 
-// ==========================================
-// --- FUNCIÓN 6: LISTAR CERRADURAS ---
-// ==========================================
-exports.listarCerradurasTTLock = onCall({ 
-    region: "us-central1", 
-    secrets: ["TTLOCK_CLIENT_ID", "TTLOCK_CLIENT_SECRET"]
-}, async (request) => {
-    try {
-        const authRef = db.collection('configuracion_sistema').doc('ttlock_auth');
-        const authDoc = await authRef.get();
-        let { accessToken, refreshToken } = authDoc.data();
-
-        let response = await axios.get('https://api.ttlock.com/v3/lock/list', {
-            params: { clientId: process.env.TTLOCK_CLIENT_ID, accessToken, pageNo: 1, pageSize: 100, date: Date.now() }
-        });
-
-        if (response.data.errcode === 10003) { 
-            const params = new URLSearchParams({
-                client_id: process.env.TTLOCK_CLIENT_ID,
-                client_secret: process.env.TTLOCK_CLIENT_SECRET,
-                refresh_token: refreshToken,
-                grant_type: 'refresh_token'
-            });
-            const refreshRes = await axios.post('https://api.ttlock.com/oauth2/token', params);
-            if (refreshRes.data.access_token) {
-                accessToken = refreshRes.data.access_token;
-                await authRef.update({ accessToken, refreshToken: refreshRes.data.refresh_token, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
-                response = await axios.get('https://api.ttlock.com/v3/lock/list', {
-                    params: { clientId: process.env.TTLOCK_CLIENT_ID, accessToken, pageNo: 1, pageSize: 100, date: Date.now() }
-                });
-            }
-        }
-        return { success: true, list: response.data.list || [] };
-    } catch (error) {
-        throw new HttpsError('internal', error.message);
-    }
-});
 
 // ==========================================
-// --- FUNCIÓN 7: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA + B&N (OPTIMIZADA) ---
+// --- FUNCIÓN 6: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA + B&N (OPTIMIZADA) ---
 // ==========================================
 exports.validarDocumentoHuesped = onObjectFinalized({
     bucket: "studio-4343626376-fea63.firebasestorage.app", 
@@ -738,7 +737,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 });
 
 // ==========================================
-// --- FUNCIÓN 8: Cloudbeds ---
+// --- FUNCIÓN 7: Cloudbeds ---
 // ==========================================
 exports.testSincronizarCloudbeds = onRequest({
     region: "us-central1"
@@ -801,7 +800,7 @@ exports.testSincronizarCloudbeds = onRequest({
 });
 
 // ==========================================
-// --- FUNCIÓN 9: SINCRONIZAR RACK DE RESERVAS (MULTI-HABITACIÓN PRO) ---
+// --- FUNCIÓN 8: SINCRONIZAR RACK DE RESERVAS (MULTI-HABITACIÓN PRO) ---
 // ==========================================
 exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res) => {
     try {
@@ -826,6 +825,16 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
         
         const nombreCloudbeds = d.guestName || `${d.firstName || ""} ${d.lastName || ""}`.trim();
         const nombreFinal = nombreCloudbeds || "Huésped";
+
+        // --- NUEVA LÓGICA DE SALDO Y PAGO ---
+        const saldoPendiente = parseFloat(d.balance || 0);
+        let statusPago = "completed"; // Asumimos pagado por defecto
+        
+        // Si el balance es mayor a 0 y la reserva no está cancelada/no show
+        if (saldoPendiente > 0 && d.status !== 'canceled' && d.status !== 'no_show') {
+            statusPago = "pending";
+        }
+        // ------------------------------------
 
         let totalGuests = 0;
         let roomsAssigned = [];
@@ -886,6 +895,11 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
             check_in: d.startDate,
             check_out: d.endDate,
             status: d.status,
+            // NUEVOS CAMPOS A GUARDAR EN FIRESTORE
+            pay_status: statusPago,
+            balance: saldoPendiente,
+            access_enabled: true, 
+            // ------------------------------------
             rooms: roomsAssigned, 
             room_id_cloudbeds: roomsAssigned[0]?.room_id_cloudbeds || null,
             room_name: roomsAssigned.map(r => r.room_name).join(" + ") || "No asignada",
@@ -894,7 +908,7 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
             last_sync: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         
-        console.log(`✅ Webhook: Reserva ${reservationID} actualizada con éxito (${roomsAssigned.length} habitaciones).`);
+        console.log(`✅ Webhook: Reserva ${reservationID} actualizada. Saldo: $${saldoPendiente} (${statusPago}).`);
         return res.status(200).send("OK");
 
     } catch (error) {
@@ -969,7 +983,7 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
 });
 
 // ==========================================
-// --- FUNCIÓN 10: PLEXO (Versión API REST Moderna) ---
+// --- FUNCIÓN 9: INTEGRACIÓN PLEXO (WCF + PUERTO 4043) ---
 // ==========================================
 exports.crearPagoPlexo = onCall({
     region: "us-central1",
@@ -980,11 +994,14 @@ exports.crearPagoPlexo = onCall({
     const amount = data.amount ? parseFloat(data.amount) : 1500.0;
     
     try {
-        // 1. TU LLAVE MAESTRA (Pegá acá tu API Secret completo)
-        const PLEXO_API_SECRET = "95420PEGAR_EL_RESTO_DEL_CODIGO_AQUI"; 
+        const pemPath = path.join(__dirname, 'private_key.pem');
+        const privateKey = fs.readFileSync(pemPath, 'utf8');
 
-        // 2. EL PAYLOAD LIMPIO (Lo que el banco necesita saber)
-        const payload = {
+        // El fingerprint exacto de SkyRoomsTest
+        const PLEXO_FINGERPRINT = "A730BD63766B54048F8F9A2FCCB9BD42802D71ED"; 
+
+        const requestInterno = {
+            Action: 35, // 35 es crear pago
             Amount: amount,
             Currency: "UYU",
             ClientInformation: {
@@ -995,34 +1012,55 @@ exports.crearPagoPlexo = onCall({
             RedirectUri: "https://skyrooms.uy/"
         };
 
-        // 3. INTENTO DE RUTA REST (Basado en la estructura de Plexo)
-        // Usualmente las API REST están en api.plexo o similar. Probaremos esta primero:
-        const PLEXO_API_URL = "https://api.testing.plexo.com.uy/v1/Authorize";
+        const objetoAFirmar = {
+            Fingerprint: PLEXO_FINGERPRINT,
+            Object: {
+                Client: "SkyRoomsTest",
+                Request: requestInterno
+            },
+            UTCUnixTimeExpiration: Math.floor((Date.now() + 300000) / 1000) // 5 minutos
+        };
 
-        console.log("Enviando petición REST a Plexo...");
+        const jsonCanonizado = JSON.stringify(objetoAFirmar);
 
-        // 4. EL ENVÍO (Mirá qué simple es sin la firma)
-        const response = await axios.post(PLEXO_API_URL, payload, {
-            headers: { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${PLEXO_API_SECRET}` // Acá va tu llave
-            }
+        const sign = crypto.createSign('SHA512');
+        sign.update(jsonCanonizado);
+        const signature = sign.sign({ 
+            key: privateKey, 
+            padding: crypto.constants.RSA_PKCS1_PADDING 
+        }, 'base64');
+
+        const payloadFinal = {
+            Object: objetoAFirmar,
+            Signature: signature
+        };
+
+        console.log("Enviando JSON a Plexo...");
+
+        // ¡EL DESCUBRIMIENTO DE GABRIEL! Agregamos el :4043 y la ruta AuthorizeJSON
+        const PLEXO_API_URL = "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/AuthorizeJSON";
+
+        const response = await axios.post(PLEXO_API_URL, payloadFinal, {
+            headers: { 'Content-Type': 'application/json; charset=utf-8' }
         });
 
-        console.log("¡Respuesta REST de Plexo!", JSON.stringify(response.data));
+        console.log("Respuesta del banco:", JSON.stringify(response.data));
 
-        if (response.data && response.data.RedirectUrl) {
-            return { success: true, payment_url: response.data.RedirectUrl };
+        const resultado = response.data.AuthorizeJSONResult || response.data;
+
+        if (resultado && resultado.RedirectUrl) {
+            return { success: true, payment_url: resultado.RedirectUrl };
+        } else if (resultado && resultado.Error) {
+             throw new Error(resultado.Error);
         } else {
-            return { success: false, error: "Faltó la URL en la respuesta" };
+            return { success: false, error: "Estructura inesperada del banco" };
         }
 
     } catch (error) {
-        // En REST, los errores nos hablan claro. Vamos a imprimirlo:
         const status = error.response ? error.response.status : "No status";
         const errorData = error.response && error.response.data ? JSON.stringify(error.response.data) : error.message;
         
-        console.error(`Error REST en Plexo (Status: ${status}):`, errorData);
-        throw new HttpsError('internal', `Plexo rechazó la solicitud REST: ${errorData}`);
+        console.error(`Error HTTP ${status} en Plexo:`, errorData);
+        throw new HttpsError('internal', `Plexo rechazó la solicitud (Status: ${status}). Revisa los logs.`);
     }
 });

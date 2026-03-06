@@ -93,25 +93,38 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
   
   const normalizedStatus = booking.status === 'checked_in' ? 'Checked-In' : booking.status;
 
-  const accessDeniedByStatus =
-    !booking.access_enabled || normalizedStatus !== "Checked-In"
-
   // Date validation logic
   const now = new Date()
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()) // Date without time
-  let accessExpired = false
+  let isOutsideDateRange = false
   if (booking.check_in && booking.check_out) {
-    // Firestore dates are 'yyyy-MM-dd'. Appending T00:00:00 treats them as local time at midnight.
     const checkInDate = new Date(booking.check_in + "T00:00:00")
     const checkOutDate = new Date(booking.check_out + "T00:00:00")
 
-    // Access is valid from the start of check-in day through the end of check-out day.
     if (today < checkInDate || today > checkOutDate) {
-      accessExpired = true
+      isOutsideDateRange = true
     }
   }
 
-  const finalAccessDenied = accessDeniedByStatus || accessExpired
+  const showCode = booking.access_enabled && !isOutsideDateRange && normalizedStatus === 'Checked-In';
+
+  let message: string;
+  let title: string = 'Acceso Restringido';
+
+  if (!booking.access_enabled) {
+    message = "El administrador ha deshabilitado el acceso. Contacta con recepción.";
+  } else if (isOutsideDateRange) {
+    message = "El acceso está fuera de las fechas de tu reserva.";
+    title = 'Acceso Expirado';
+  } else if (normalizedStatus !== 'Checked-In') {
+    message = `Tu reserva está ${normalizedStatus}. El código estará disponible aquí el día de tu llegada tras hacer el check-in.`;
+    title = `Reserva ${normalizedStatus}`;
+  } else if (!room.backup_code) {
+    message = "El código de acceso para tu habitación aún no está disponible. Contacta con recepción.";
+    title = 'Código no disponible';
+  } else {
+    message = "Utiliza el siguiente código numérico para acceder a tu habitación.";
+  }
 
   return (
     <div className="flex h-screen w-full flex-col items-center justify-center bg-background p-4">
@@ -123,21 +136,15 @@ export default function RoomAccessPage({ params }: { params: { id: string } }) {
           Habitación <span className="text-primary">{room.name}</span>
         </h1>
         <p className="mt-2 text-muted-foreground">
-          {finalAccessDenied
-            ? accessExpired
-              ? "Acceso Expirado. Contacta con recepción."
-              : "Acceso restringido. Contacta con recepción."
-            : room.backup_code
-            ? "Utiliza el siguiente código para acceder."
-            : "Código no disponible. Contacta con recepción."}
+          {message}
         </p>
 
         <div className="relative mt-12 flex h-80 w-full items-center justify-center">
-            {finalAccessDenied ? (
+            {!showCode ? (
               <div className="flex flex-col items-center gap-4 text-destructive">
                 <ShieldOff className="h-24 w-24" />
                 <span className="text-xl font-semibold">
-                  {accessExpired ? "Acceso Expirado" : "Acceso Deshabilitado"}
+                  {title}
                 </span>
               </div>
             ) : (

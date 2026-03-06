@@ -63,13 +63,11 @@ export default function GuestLoginPage() {
         ...bookingsSnapshot.docs[0].data(),
       } as Booking
 
-      const normalizedStatus = foundBooking.status === 'checked_in' ? 'Checked-In' : foundBooking.status;
-
-      if (foundBooking.access_enabled && normalizedStatus === "Checked-In") {
+      if (foundBooking.access_enabled) {
         router.push(`/access/${foundBooking.id}`)
       } else {
         setError(
-          "El acceso para esta reserva no está habilitado o la reserva no está activa. Contacte con recepción."
+          "El acceso para esta reserva ha sido deshabilitado por administración. Contacte con recepción."
         )
       }
     } catch (err) {

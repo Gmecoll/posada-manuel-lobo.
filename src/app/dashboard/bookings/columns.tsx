@@ -218,7 +218,6 @@ export const getColumns = ({
       const handleAccessChange = (enabled: boolean) => {
         onAccessToggle(booking, enabled)
       }
-      const normalizedStatus = normalizeStatus(booking.status)
 
       return (
         <div className="flex items-center space-x-2">
@@ -226,7 +225,6 @@ export const getColumns = ({
             id={`access-switch-${booking.id}`}
             checked={booking.access_enabled}
             onCheckedChange={handleAccessChange}
-            disabled={!["Confirmed", "Checked-In"].includes(normalizedStatus)}
           />
         </div>
       )
