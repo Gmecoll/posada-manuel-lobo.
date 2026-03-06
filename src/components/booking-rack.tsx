@@ -78,23 +78,27 @@ export function BookingRack() {
             const aParsed = parseRoomNameForSort(a.name);
             const bParsed = parseRoomNameForSort(b.name);
     
-            // Primary sort: by number
-            if (aParsed.number < bParsed.number) return -1;
-            if (aParsed.number > bParsed.number) return 1;
-    
-            // Secondary sort: by prefix order
             const aPrefixIndex = prefixOrder.indexOf(aParsed.prefix);
             const bPrefixIndex = prefixOrder.indexOf(bParsed.prefix);
-            
+
+            // Handle cases where one or both prefixes are not in the order array
             if (aPrefixIndex === -1 && bPrefixIndex === -1) {
+                // If both are not in the list, sort by number, then by prefix alphabetically
+                if (aParsed.number < bParsed.number) return -1;
+                if (aParsed.number > bParsed.number) return 1;
                 return aParsed.prefix.localeCompare(bParsed.prefix);
             }
-            if (aPrefixIndex === -1) return 1; 
-            if (bPrefixIndex === -1) return -1;
-            
+            if (aPrefixIndex === -1) return 1; // a goes after b
+            if (bPrefixIndex === -1) return -1; // b goes after a
+
+            // Primary sort: by prefix order
             if (aPrefixIndex < bPrefixIndex) return -1;
             if (aPrefixIndex > bPrefixIndex) return 1;
-    
+
+            // Secondary sort: by number
+            if (aParsed.number < bParsed.number) return -1;
+            if (aParsed.number > bParsed.number) return 1;
+
             return 0;
           });
         setRooms(roomsFromDb)
