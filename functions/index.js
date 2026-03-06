@@ -391,8 +391,6 @@ async function llamarTTLock(lockId, userIdentifier, logDescription) {
     }
     return { success: false, error: response.data.errmsg || "Error desconocido de la cerradura" };
 }
-
-
 // ==========================================
 // --- FUNCIÓN 6: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA + B&N (OPTIMIZADA) ---
 // ==========================================
@@ -404,7 +402,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 }, async (event) => {
     const filePath = event.data.name;
 
-    // FIX: Check for metadata flag from the event to prevent loops
     if (event.data.metadata && event.data.metadata.ocr_processed) {
         console.log(`File ${filePath} has already been processed. Skipping.`);
         return null;
@@ -420,21 +417,59 @@ exports.validarDocumentoHuesped = onObjectFinalized({
     const fileNameParts = fileName.split('_');
     const guestIndex = fileNameParts.length > 1 ? parseInt(fileNameParts[1]) : 1;
 
+    // 🛑 HELPER PARA RECHAZAR Y AVISAR AL FRONTEND
+    const markAsInvalid = async (reason) => {
+        console.log(`Documento rechazado (Reserva ${finalBookingId}, Huésped ${guestIndex}): ${reason}`);
+        const bookingRef = db.collection('bookings').doc(finalBookingId);
+        
+        await db.runTransaction(async (transaction) => {
+            const docSnap = await transaction.get(bookingRef);
+            if (!docSnap.exists) return;
+            
+            const bData = docSnap.data();
+            let guestsVerification = bData.guests_verification || {};
+            
+            if (!guestsVerification[guestIndex]) {
+                guestsVerification[guestIndex] = {
+                    front_uploaded: false, back_uploaded: false, front_text: "", first_name: "", last_name: "", name: "Pendiente", status: "pending", avatar_url: "", front_image_url: "", back_image_url: "", passport_url: ""
+                };
+            }
+            
+            // Cambiamos el estado a 'unmatch' para destrabar el Frontend
+            guestsVerification[guestIndex].status = "unmatch";
+            guestsVerification[guestIndex].front_uploaded = false; 
+            
+            let overallStatus = bData.document_status || "pending";
+            if (!overallStatus.includes("approved")) {
+                overallStatus = `unmatch ${guestIndex}`;
+            }
+
+            transaction.update(bookingRef, {
+                guests_verification: guestsVerification,
+                document_status: overallStatus,
+                document_validated_at: admin.firestore.FieldValue.serverTimestamp() 
+            });
+        });
+        return null;
+    };
+
     try {
         const bucket = admin.storage().bucket(event.data.bucket);
         const file = bucket.file(filePath);
         const visionClient = new ImageAnnotatorClient();
         
-        // DESCARGAMOS EL BUFFER ORIGINAL Y CORREGIMOS ROTACIÓN EXIF
         const [originalBuffer] = await file.download();
-        const buffer = await sharp(originalBuffer).rotate().toBuffer(); // AUTO-ROTATE-EXIF
+        const buffer = await sharp(originalBuffer).rotate().toBuffer(); 
 
         const [result] = await visionClient.annotateImage({
             image: { content: buffer },
             features: [ { type: 'TEXT_DETECTION' }, { type: 'FACE_DETECTION' } ]
         });
         
-        if (!result.textAnnotations || result.textAnnotations.length === 0) return null;
+        // 🛑 CONTROL: SI NO HAY NINGÚN TEXTO
+        if (!result.textAnnotations || result.textAnnotations.length === 0) {
+            return await markAsInvalid("No se detectó ningún texto en la imagen.");
+        }
 
         const fullText = result.textAnnotations[0].description;
         const upperText = fullText.toUpperCase();
@@ -447,41 +482,39 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         let extractedLastName = "";
         let formattedName = "";
 
-        // 1. ANÁLISIS MRZ (NUEVA LÓGICA ANTI-ESPACIOS)
+        // 1. ANÁLISIS MRZ (LÓGICA OPTIMIZADA)
         const unifiedText = fullText.toUpperCase().replace(/[\s\n\r]+/g, '<');
         const hasMRZ = unifiedText.includes('<<');
 
         if (hasMRZ) {
             isBack = true;
             
-            // Try to match standard Passport format first (P<...)
+            // 1er Intento: Pasaporte
             const passportMatch = unifiedText.match(/P<[A-Z]{3}<([A-Z<]+)<<([A-Z<]+)/);
             if (passportMatch) {
                 isPassport = true;
-                // Last names are between country code and '<<'
-                extractedLastName = passportMatch[1].replace(/<+/g, ' ').trim();
-                // First names are after '<<'. We take the first one.
-                extractedFirstName = passportMatch[2].split('<')[0].trim();
+                extractedLastName = passportMatch[1].replace(/<+/g, ' ').trim().split(' ')[0];
+                extractedFirstName = passportMatch[2].replace(/<+/g, ' ').trim().split(' ')[0];
             } else {
-                // Logic for other ID cards (non-passports)
-                
-                // First name is always after '<<'
-                const nameMatch = unifiedText.match(/<<([A-Z<]+)/);
-                if (nameMatch && nameMatch[1]) {
-                    extractedFirstName = nameMatch[1].split('<')[0].trim();
-                }
+                // 2do Intento: DNI/Cédulas (Busca específicamente la línea del nombre ignorando números)
+                const nameLineMatch = unifiedText.match(/([A-Z]+<+[A-Z<]+<<[A-Z<]+)/);
 
-                // For last name, first try the user-provided pattern: <[digit]...<<
-                const specificLastNameMatch = unifiedText.match(/<[0-9O]([A-Z<]+)<</);
-                if (specificLastNameMatch && specificLastNameMatch[1]) {
-                    extractedLastName = specificLastNameMatch[1].replace(/<+/g, ' ').trim();
+                if (nameLineMatch && nameLineMatch[0]) {
+                    const parts = nameLineMatch[0].split('<<');
+                    if (parts.length >= 2) {
+                        extractedLastName = parts[0].replace(/<+/g, ' ').trim().split(' ')[0];
+                        extractedFirstName = parts[1].replace(/<+/g, ' ').trim().split(' ')[0];
+                    }
                 } else {
-                    // If not found, use a general fallback for ID cards.
-                    // This pattern looks for a long ID number/string, then extracts the name.
-                    // e.g., IDUTO123456<7<<<<<<<<DOE<<JOHN
-                    const fallbackLastNameMatch = unifiedText.match(/[A-Z0-9<]{9,}<([A-Z<]+)<</);
-                    if (fallbackLastNameMatch && fallbackLastNameMatch[1]) {
-                         extractedLastName = fallbackLastNameMatch[1].replace(/<+/g, ' ').trim();
+                    // 3er Intento: Fallback de seguridad
+                    const nameMatch = unifiedText.match(/<<([A-Z]+)[<A-Z]*/);
+                    if (nameMatch && nameMatch[1]) {
+                        extractedFirstName = nameMatch[1].replace(/<+/g, ' ').trim().split(' ')[0];
+                    }
+
+                    const specificLastNameMatch = unifiedText.match(/([A-Z]+(?:<+[A-Z]+)*)<<[A-Z]+/);
+                    if (specificLastNameMatch && specificLastNameMatch[1]) {
+                        extractedLastName = specificLastNameMatch[1].replace(/<+/g, ' ').trim().split(' ')[0];
                     }
                 }
             }
@@ -490,16 +523,20 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             if (frontKeywords.some(kw => upperText.includes(kw))) {
                 isFront = true;
             } else {
-                 return null; 
+                // 🛑 CONTROL: HAY TEXTO PERO NO ES UN DOCUMENTO
+                return await markAsInvalid("La imagen contiene texto, pero no coincide con un documento de identidad válido."); 
             }
         }
 
-        const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        const capitalize = (s) => {
+            if (!s) return "";
+            return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+        };
+
         if (extractedFirstName || extractedLastName) {
             formattedName = `${capitalize(extractedFirstName)} ${capitalize(extractedLastName)}`.trim();
         }
 
-        // 2. LÓGICA DE ROTACIÓN INTELIGENTE
         let imageRotationAngle = 0;
         const metadata = await sharp(buffer).metadata();
         if ((isFront || isPassport) && result.faceAnnotations && result.faceAnnotations.length > 0) {
@@ -509,7 +546,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             else if (roll > 135 || roll < -135) imageRotationAngle = 180;
         }
         
-        // 3. RECORTE Y GUARDADO DEL DOCUMENTO
         let document_image_url = "";
         let finalDocBuffer = buffer;
         const docBoundary = result.textAnnotations?.[0]?.boundingPoly;
@@ -550,14 +586,11 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 const newToken = crypto.randomUUID();
                 
                 await file.save(finalProcessedBuffer, {
-                    metadata: { 
-                        contentType: 'image/jpeg',
-                        metadata: { firebaseStorageDownloadTokens: newToken, ocr_processed: 'true' }
-                    }
+                    metadata: { contentType: 'image/jpeg', metadata: { firebaseStorageDownloadTokens: newToken, ocr_processed: 'true' } }
                 });
                 document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${newToken}`;
             } catch (procErr) {
-                console.error("Error al guardar el documento procesado:", procErr);
+                console.error("Error al guardar:", procErr);
                 const [originalMetadata] = await file.getMetadata();
                 let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || crypto.randomUUID();
                 document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token.split(',')[0]}`;
@@ -566,12 +599,9 @@ exports.validarDocumentoHuesped = onObjectFinalized({
              const [originalMetadata] = await file.getMetadata();
              let token = originalMetadata.metadata?.firebaseStorageDownloadTokens || crypto.randomUUID();
              document_image_url = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(filePath)}?alt=media&token=${token.split(',')[0]}`;
-             // Mark as processed even if no changes to content to prevent re-runs
              await file.setMetadata({ metadata: { ...(originalMetadata.metadata || {}), ocr_processed: 'true' }});
         }
 
-
-        // 4. EXTRACCIÓN Y RESTAURACIÓN FACIAL (B&N)
         let avatarUrl = "";
         if ((isFront || isPassport) && result.faceAnnotations && result.faceAnnotations.length > 0) {
             try {
@@ -584,16 +614,14 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 const yMin = Math.min(...ys);
                 const yMax = Math.max(...ys);
 
-                // FIX: Centered, square crop logic
                 const width = xMax - xMin;
                 const height = yMax - yMin;
                 const centerX = xMin + width / 2;
                 const centerY = yMin + height / 2;
-                const size = Math.max(width, height) * 1.5; // 50% padding around the largest dimension
+                const size = Math.max(width, height) * 1.5; 
                 
                 const cropLeft = Math.floor(Math.max(0, centerX - size / 2));
                 const cropTop = Math.floor(Math.max(0, centerY - size / 2));
-                
                 const cropWidth = Math.floor(Math.min(size, metadata.width - cropLeft));
                 const cropHeight = Math.floor(Math.min(size, metadata.height - cropTop));
 
@@ -641,7 +669,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             } catch (cropErr) { console.error("Error extracción rostro:", cropErr); }
         }
 
-        // 5. ACTUALIZACIÓN FIRESTORE
+        // 5. ACTUALIZACIÓN FIRESTORE FINAL
         const bookingRef = db.collection('bookings').doc(finalBookingId);
         await db.runTransaction(async (transaction) => {
             const docSnap = await transaction.get(bookingRef);
@@ -664,9 +692,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             if (isPassport) {
                 gv.is_passport = true; gv.front_uploaded = true; gv.back_uploaded = true; gv.first_name = extractedFirstName; gv.last_name = extractedLastName; gv.name = formattedName || gv.name;
                 if (document_image_url) {
-                    gv.passport_url = document_image_url;
-                    gv.front_image_url = document_image_url;
-                    gv.back_image_url = document_image_url;
+                    gv.passport_url = document_image_url; gv.front_image_url = document_image_url; gv.back_image_url = document_image_url;
                 }
             } else if (isFront) {
                 gv.front_uploaded = true; gv.front_text = upperText;
@@ -675,7 +701,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 gv.back_uploaded = true; gv.first_name = extractedFirstName; gv.last_name = extractedLastName; gv.name = formattedName || gv.name;
                 if (document_image_url) gv.back_image_url = document_image_url;
             }
-
 
             if (gv.front_uploaded && gv.back_uploaded && !gv.is_passport) {
                 const normalize = (str) => str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
@@ -732,9 +757,14 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             transaction.update(bookingRef, updatePayload);
         });
 
-    } catch (e) { console.error("OCR Error:", e); }
+    } catch (e) { 
+        console.error("OCR Error General:", e); 
+        // 🛑 CONTROL: SI FALLA LA IA POR CUALQUIER MOTIVO
+        return await markAsInvalid("Ocurrió un error procesando la imagen. Intenta tomar una foto más clara.");
+    }
     return null;
 });
+
 
 // ==========================================
 // --- FUNCIÓN 7: Cloudbeds ---
@@ -1062,5 +1092,93 @@ exports.crearPagoPlexo = onCall({
         
         console.error(`Error HTTP ${status} en Plexo:`, errorData);
         throw new HttpsError('internal', `Plexo rechazó la solicitud (Status: ${status}). Revisa los logs.`);
+    }
+});
+// ==========================================
+// --- FUNCIÓN 10: MOTOR DE UPSELLING REAL ---
+// ==========================================
+exports.verificarUpgrade = onCall({
+    region: "us-central1",
+    cors: true
+}, async (request) => {
+    const data = request.data || {};
+    const bookingId = data.bookingId;
+
+    if (!bookingId) {
+        throw new HttpsError('invalid-argument', 'Falta el ID de la reserva.');
+    }
+
+    // 1. Definimos tu jerarquía real y los precios EXTRA por NOCHE (Ajusta estos valores)
+    const jerarquia = [
+        { name: "Estándar", extra: 0 },
+        { name: "Doble Superior", extra: 500 }, 
+        { name: "Deluxe King", extra: 1000 },
+        { name: "Suites con Hidromasaje", extra: 1800 }
+    ];
+
+    try {
+        const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
+        const cloudbedsToken = cbAuthDoc.data().access_token.trim();
+
+        // 2. Traemos la reserva actual
+        const resResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservation", {
+            params: { reservationID: bookingId },
+            headers: { 'Authorization': `Bearer ${cloudbedsToken}` }
+        });
+
+        const reserva = resResponse.data.data;
+        // Obtenemos el nombre del tipo de habitación actual (ej: "Estándar")
+        const habitacionActual = reserva.assigned[0]?.roomTypeName || "";
+        const cantHuespedes = parseInt(reserva.adults) + parseInt(reserva.children || 0);
+
+        // 3. Buscamos cuál es la categoría que le sigue
+        const indexActual = jerarquia.findIndex(h => habitacionActual.includes(h.name));
+        
+        // Si no la encontramos o ya está en la mejor, no ofrecemos nada
+        if (indexActual === -1 || indexActual === jerarquia.length - 1) {
+            return { available: false, reason: "Categoría máxima alcanzada." };
+        }
+
+        const objetivo = jerarquia[indexActual + 1];
+
+        // 4. Consultamos disponibilidad real para la categoría objetivo
+        const availResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getAvailability", {
+            params: { 
+                propertyID: reserva.propertyID, 
+                startDate: reserva.startDate, 
+                endDate: reserva.endDate 
+            },
+            headers: { 'Authorization': `Bearer ${cloudbedsToken}` }
+        });
+
+        const tiposDisponibles = availResponse.data.data;
+        const infoDisponibilidad = tiposDisponibles.find(t => t.roomTypeName.includes(objetivo.name));
+
+        // 5. Si hay disponibilidad real (> 0), calculamos la oferta
+        if (infoDisponibilidad && parseInt(infoDisponibilidad.available) > 0) {
+            const noches = Math.ceil(Math.abs(new Date(reserva.endDate) - new Date(reserva.startDate)) / (1000 * 60 * 60 * 24));
+            
+            // Cálculo pedido: (Precio Extra por noche / Cantidad de Huéspedes)
+            const precioPorPersonaDia = Math.round(objetivo.extra / cantHuespedes);
+            const diferenciaTotal = objetivo.extra * noches;
+
+            return {
+                available: true,
+                offer: {
+                    newRoomName: objetivo.name,
+                    pricePerGuestDay: precioPorPersonaDia,
+                    totalDifference: diferenciaTotal,
+                    nights: noches,
+                    guestCount: cantHuespedes,
+                    description: `Mejora tu estancia a una ${objetivo.name} y disfruta de una experiencia superior.`
+                }
+            };
+        }
+
+        return { available: false, reason: "Sin disponibilidad en la categoría superior." };
+
+    } catch (error) {
+        console.error("Error en motor de upgrade:", error.message);
+        throw new HttpsError('internal', 'Error consultando disponibilidad.');
     }
 });
