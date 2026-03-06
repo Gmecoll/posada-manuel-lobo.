@@ -112,7 +112,7 @@ exports.iniciarPagoServicio = onCall({
 // --- FUNCIÓN 2: MANTENIMIENTO ---
 // ==========================================
 exports.mantenimientoHabitaciones = onSchedule({
-  schedule: "every 5 minutes",
+  schedule: "every 60 minutes",
   region: "us-central1",
   memory: "256MiB",
 }, async (event) => {
@@ -1094,8 +1094,9 @@ exports.crearPagoPlexo = onCall({
         throw new HttpsError('internal', `Plexo rechazó la solicitud (Status: ${status}). Revisa los logs.`);
     }
 });
+
 // ==========================================
-// --- FUNCIÓN 10: MOTOR DE UPSELLING REAL ---
+// --- FUNCIÓN 10: MOTOR DE UPSELLING (FIRESTORE NATIVO) ---
 // ==========================================
 exports.verificarUpgrade = onCall({
     region: "us-central1",
@@ -1104,81 +1105,133 @@ exports.verificarUpgrade = onCall({
     const data = request.data || {};
     const bookingId = data.bookingId;
 
-    if (!bookingId) {
-        throw new HttpsError('invalid-argument', 'Falta el ID de la reserva.');
-    }
+    if (!bookingId) throw new HttpsError('invalid-argument', 'Falta el ID.');
 
-    // 1. Definimos tu jerarquía real y los precios EXTRA por NOCHE (Ajusta estos valores)
     const jerarquia = [
-        { name: "Estándar", extra: 0 },
-        { name: "Doble Superior", extra: 500 }, 
-        { name: "Deluxe King", extra: 1000 },
-        { name: "Suites con Hidromasaje", extra: 1800 }
+        { id: "es", name: "Estándar", extra: 0 },
+        { id: "do", name: "Doble Superior", extra: 500 }, 
+        { id: "dk", name: "Deluxe King", extra: 1000 },
+        { id: "sh", name: "Suites con Hidromasaje", extra: 1800 }
     ];
 
     try {
-        const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
-        const cloudbedsToken = cbAuthDoc.data().access_token.trim();
-
-        // 2. Traemos la reserva actual
-        const resResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservation", {
-            params: { reservationID: bookingId },
-            headers: { 'Authorization': `Bearer ${cloudbedsToken}` }
-        });
-
-        const reserva = resResponse.data.data;
-        // Obtenemos el nombre del tipo de habitación actual (ej: "Estándar")
-        const habitacionActual = reserva.assigned[0]?.roomTypeName || "";
-        const cantHuespedes = parseInt(reserva.adults) + parseInt(reserva.children || 0);
-
-        // 3. Buscamos cuál es la categoría que le sigue
-        const indexActual = jerarquia.findIndex(h => habitacionActual.includes(h.name));
+        const db = admin.firestore();
         
-        // Si no la encontramos o ya está en la mejor, no ofrecemos nada
+        // 1. OBTENER RESERVA ACTUAL
+        const bookingRef = db.collection("bookings").doc(`booking-${bookingId}`);
+        const bookingSnap = await bookingRef.get();
+        
+        if (!bookingSnap.exists) return { available: false, reason: "Reserva no encontrada." };
+        
+        const bData = bookingSnap.data();
+        if (['canceled', 'Cancelada', 'no_show'].includes(bData.status)) {
+            return { available: false, reason: "Reserva inactiva." };
+        }
+
+        // Buscar el nombre de habitación actual (ej: "dk(2)")
+        let roomNameActual = bData.room_name || "";
+        if (bData.rooms && bData.rooms.length > 0 && bData.rooms[0].room_name) {
+            roomNameActual = bData.rooms[0].room_name;
+        }
+        roomNameActual = roomNameActual.toLowerCase().trim();
+
+        const checkInTxt = bData.check_in;
+        const checkOutTxt = bData.check_out;
+        const cantHuespedes = parseInt(bData.guest_count) || 1;
+
+        if (!checkInTxt || !checkOutTxt) return { available: false, reason: "Sin fechas." };
+
+        const myCheckIn = new Date(checkInTxt + "T00:00:00");
+        const myCheckOut = new Date(checkOutTxt + "T00:00:00");
+
+        // 2. CATEGORÍA ACTUAL Y OBJETIVO
+        const indexActual = jerarquia.findIndex(h => roomNameActual.includes(h.id));
         if (indexActual === -1 || indexActual === jerarquia.length - 1) {
-            return { available: false, reason: "Categoría máxima alcanzada." };
+            return { available: false, reason: `No aplica a upgrade (Hab actual: ${roomNameActual}).` };
         }
 
         const objetivo = jerarquia[indexActual + 1];
 
-        // 4. Consultamos disponibilidad real para la categoría objetivo
-        const availResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getAvailability", {
-            params: { 
-                propertyID: reserva.propertyID, 
-                startDate: reserva.startDate, 
-                endDate: reserva.endDate 
-            },
-            headers: { 'Authorization': `Bearer ${cloudbedsToken}` }
+        // 3. IDENTIFICAR LAS HABITACIONES FÍSICAS OBJETIVO
+        const roomsSnap = await db.collection("rooms").get();
+        const habitacionesFisicasObjetivo = [];
+
+        roomsSnap.forEach(doc => {
+            const rData = doc.data();
+            const rName = (rData.name || "").toLowerCase().trim();
+            const rTypeName = (rData.type_name || "").toLowerCase().trim();
+
+            // Si es la habitación que buscamos (ej: incluye "sh" o "Suites con Hidromasaje")
+            if (rName.includes(objetivo.id) || rTypeName.includes(objetivo.name.toLowerCase())) {
+                if (rName) habitacionesFisicasObjetivo.push(rName); // Guardamos "sh(1)", "sh(2)"
+            }
         });
 
-        const tiposDisponibles = availResponse.data.data;
-        const infoDisponibilidad = tiposDisponibles.find(t => t.roomTypeName.includes(objetivo.name));
+        if (habitacionesFisicasObjetivo.length === 0) {
+            return { available: false, reason: `No hay inventario configurado para ${objetivo.name}.` };
+        }
 
-        // 5. Si hay disponibilidad real (> 0), calculamos la oferta
-        if (infoDisponibilidad && parseInt(infoDisponibilidad.available) > 0) {
-            const noches = Math.ceil(Math.abs(new Date(reserva.endDate) - new Date(reserva.startDate)) / (1000 * 60 * 60 * 24));
-            
-            // Cálculo pedido: (Precio Extra por noche / Cantidad de Huéspedes)
-            const precioPorPersonaDia = Math.round(objetivo.extra / cantHuespedes);
-            const diferenciaTotal = objetivo.extra * noches;
+        // 4. CRUZAR CON EL RACK (Buscando choques de fechas)
+        const bookingsSnap = await db.collection("bookings")
+            .where("status", "in", ["Confirmed", "confirmed", "Checked-In", "checked_in", "Bloqueada", "pending", "Pendiente"])
+            .get();
+
+        const habitacionesOcupadas = new Set();
+
+        bookingsSnap.forEach(doc => {
+            if (doc.id === bookingSnap.id) return; // Ignorar la propia reserva
+
+            const res = doc.data();
+            if (!res.check_in || !res.check_out) return;
+
+            const resIn = new Date(res.check_in + "T00:00:00");
+            const resOut = new Date(res.check_out + "T00:00:00");
+
+            if (resIn < myCheckOut && resOut > myCheckIn) { // Hay solapamiento
+                if (res.rooms && Array.isArray(res.rooms)) {
+                    res.rooms.forEach(r => {
+                        if (r.room_name) habitacionesOcupadas.add(r.room_name.toLowerCase().trim());
+                    });
+                } else if (res.room_name) {
+                    habitacionesOcupadas.add(res.room_name.toLowerCase().trim());
+                }
+            }
+        });
+
+        // 5. ¿QUEDA ALGUNA LIBRE?
+        let hayUpgradeLibre = false;
+        for (const hab of habitacionesFisicasObjetivo) {
+            if (!habitacionesOcupadas.has(hab)) {
+                hayUpgradeLibre = true;
+                break;
+            }
+        }
+
+        if (hayUpgradeLibre) {
+            const noches = Math.ceil(Math.abs(myCheckOut - myCheckIn) / (1000 * 60 * 60 * 24));
+            const diferenciaExtra = objetivo.extra - jerarquia[indexActual].extra;
+            const precioPorHuespedDia = Math.round(diferenciaExtra / cantHuespedes);
+            const diferenciaTotal = diferenciaExtra * noches;
 
             return {
                 available: true,
                 offer: {
                     newRoomName: objetivo.name,
-                    pricePerGuestDay: precioPorPersonaDia,
+                    pricePerGuestDay: precioPorHuespedDia,
                     totalDifference: diferenciaTotal,
                     nights: noches,
-                    guestCount: cantHuespedes,
-                    description: `Mejora tu estancia a una ${objetivo.name} y disfruta de una experiencia superior.`
+                    description: `Disfruta de mayor espacio, cama King Size y balcón con vistas exclusivas.`
                 }
             };
         }
 
-        return { available: false, reason: "Sin disponibilidad en la categoría superior." };
+        return { 
+            available: false, 
+            reason: `Sin disponibilidad en Rack para ${objetivo.name}. Físicas: ${habitacionesFisicasObjetivo.length}. Ocupadas: ${habitacionesOcupadas.size}.` 
+        };
 
     } catch (error) {
-        console.error("Error en motor de upgrade:", error.message);
-        throw new HttpsError('internal', 'Error consultando disponibilidad.');
+        console.error(`🚨 Error en Motor Upsell Firestore:`, error.message);
+        return { available: false, error: "Falla calculando Rack." };
     }
 });

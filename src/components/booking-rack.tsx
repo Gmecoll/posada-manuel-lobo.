@@ -1,4 +1,3 @@
-
 "use client"
 
 import React, { useState, useEffect } from "react"
@@ -11,7 +10,7 @@ import {
 } from "firebase/firestore"
 import { addDays, format, differenceInDays, startOfDay, parse } from "date-fns"
 import { es } from "date-fns/locale"
-import { Plus, GripVertical, RefreshCw } from "lucide-react"
+import { Plus, GripVertical } from "lucide-react"
 
 import { db } from "@/firebaseConfig"
 import type { Room, Booking } from "@/lib/data"
@@ -29,11 +28,23 @@ import {
 import { Skeleton } from "./ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs"
 
-const getRoomNumber = (name: string) => {
-  if (!name) return 0;
-  const match = name.match(/\d+/);
-  return match ? parseInt(match[0], 10) : 0;
+const prefixOrder = ['es', 'do', 'dk', 'sh'];
+
+const parseRoomNameForSort = (name: string) => {
+    if (!name) return { prefix: 'zzz', number: Infinity };
+    
+    const match = name.match(/([a-zA-Z]+)\((\d+)\)/); 
+    if (match) {
+        return { prefix: match[1].toLowerCase(), number: parseInt(match[2], 10) };
+    }
+    
+    if (name === '4') {
+        return { prefix: '', number: 100 }; // High number to push it to the end
+    }
+    
+    return { prefix: name.toLowerCase(), number: Infinity }; 
 };
+
 
 export function BookingRack() {
   const [rooms, setRooms] = useState<Room[]>([])
@@ -41,8 +52,6 @@ export function BookingRack() {
   const [roomsMap, setRoomsMap] = useState<Map<string, Room>>(new Map())
   const [isLoading, setIsLoading] = useState(true)
   const [viewRange, setViewRange] = useState<number>(30);
-  
-  const [isSyncing, setIsSyncing] = useState(false) 
   
   const [isBookingDialogOpen, setIsBookingDialogOpen] = useState(false)
   const [bookingToEdit, setBookingToEdit] =
@@ -53,44 +62,7 @@ export function BookingRack() {
   } | null>(null)
   const { toast } = useToast()
 
-  const handleManualSync = async () => {
-    setIsSyncing(true)
-    toast({
-      title: "Sincronizando...",
-      description: "Obteniendo datos frescos de Cloudbeds.",
-    })
-
-    try {
-        const activeBookingIds = [...new Set(bookings.map(b => b.booking_id_cloudbeds))].filter(Boolean);
-        
-        const webhookUrl = "https://webhookcloudbeds-kms3iex6ya-uc.a.run.app";
-
-        let successCount = 0;
-
-        for (const cloudbedsId of activeBookingIds) {
-             try {
-                 await fetch(`${webhookUrl}?reservationID=${cloudbedsId}`);
-                 successCount++;
-             } catch (e) {
-                 console.warn(`Fallo sincronizando ${cloudbedsId}`);
-             }
-        }
-
-        toast({
-            title: "Sincronización Completa",
-            description: `Se actualizaron ${successCount} reservas desde Cloudbeds.`,
-        })
-    } catch (error) {
-        toast({
-            variant: "destructive",
-            title: "Error",
-            description: "Falló la sincronización con Cloudbeds.",
-        })
-    } finally {
-        setIsSyncing(false)
-    }
-  }
-
+  // 1. CARGA DE HABITACIONES (Tiempo Real)
   useEffect(() => {
     setIsLoading(true);
     const roomsCol = collection(db, "rooms")
@@ -102,15 +74,35 @@ export function BookingRack() {
             id: doc.id,
             ...doc.data(),
           } as Room)) 
-          .sort(
-            (a, b) => getRoomNumber(a.name) - getRoomNumber(b.name)
-          )
+          .sort((a, b) => {
+            const aParsed = parseRoomNameForSort(a.name);
+            const bParsed = parseRoomNameForSort(b.name);
+    
+            // Primary sort: by number
+            if (aParsed.number < bParsed.number) return -1;
+            if (aParsed.number > bParsed.number) return 1;
+    
+            // Secondary sort: by prefix order
+            const aPrefixIndex = prefixOrder.indexOf(aParsed.prefix);
+            const bPrefixIndex = prefixOrder.indexOf(bParsed.prefix);
+            
+            if (aPrefixIndex === -1 && bPrefixIndex === -1) {
+                return aParsed.prefix.localeCompare(bParsed.prefix);
+            }
+            if (aPrefixIndex === -1) return 1; 
+            if (bPrefixIndex === -1) return -1;
+            
+            if (aPrefixIndex < bPrefixIndex) return -1;
+            if (aPrefixIndex > bPrefixIndex) return 1;
+    
+            return 0;
+          });
         setRooms(roomsFromDb)
 
         const newRoomsMap = new Map<string, Room>();
         roomsFromDb.forEach(room => {
           if(room.room_id_cloudbeds) {
-            newRoomsMap.set(room.room_id_cloudbeds, room);
+            newRoomsMap.set(String(room.room_id_cloudbeds), room);
           }
         });
         setRoomsMap(newRoomsMap);
@@ -128,6 +120,7 @@ export function BookingRack() {
     return () => unsubscribeRooms()
   }, [])
 
+  // 2. CARGA DE RESERVAS (Tiempo Real)
   useEffect(() => {
     if (roomsMap.size === 0) return;
 
@@ -140,9 +133,9 @@ export function BookingRack() {
           
           if (data.rooms && Array.isArray(data.rooms) && data.rooms.length > 0) {
             return data.rooms.map((roomData: any) => {
-              const room = roomsMap.get(roomData.room_id_cloudbeds);
+              const room = roomData.room_id_cloudbeds ? roomsMap.get(String(roomData.room_id_cloudbeds)) : null;
               return {
-                id: `${doc.id}-${roomData.room_id_cloudbeds}`, 
+                id: `${'doc.id'}-${roomData.room_id_cloudbeds}`, 
                 docId: doc.id,
                 ...data,
                 roomId: room ? room.id : '',
@@ -151,7 +144,7 @@ export function BookingRack() {
             });
           }
 
-          const room = data.room_id_cloudbeds ? roomsMap.get(data.room_id_cloudbeds) : null;
+          const room = data.room_id_cloudbeds ? roomsMap.get(String(data.room_id_cloudbeds)) : null;
           return [{ 
               id: doc.id, 
               docId: doc.id,
@@ -174,7 +167,7 @@ export function BookingRack() {
 
   const getBookingSegments = (roomId: string) => {
     const roomBookings = bookings
-      .filter((b) => b.roomId === roomId && b.status !== "Cancelled")
+      .filter((b) => b.roomId === roomId && !['canceled', 'cancelled', 'cancelada'].includes(b.status?.toLowerCase()))
       .sort(
         (a, b) =>
           new Date(a.check_in).getTime() - new Date(b.check_in).getTime()
@@ -296,9 +289,11 @@ export function BookingRack() {
 
   const bookingStatusColors: Record<string, string> = {
     Confirmed: "bg-blue-500 border-blue-700 text-white",
+    confirmed: "bg-blue-500 border-blue-700 text-white",
     "Checked-In": "bg-green-500 border-green-700 text-white",
     checked_in: "bg-green-500 border-green-700 text-white",
     "Checked-Out": "bg-gray-400 border-gray-600 text-white",
+    checked_out: "bg-gray-400 border-gray-600 text-white",
     Bloqueada: "bg-red-500 border-red-700 text-white",
   }
 
@@ -316,7 +311,7 @@ export function BookingRack() {
            <div className="space-y-1">
             <CardTitle className="font-headline">Rack de Reservas</CardTitle>
             <CardDescription>
-              Visualización de la ocupación para el período seleccionado.
+              Visualización de la ocupación en tiempo real.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
@@ -327,16 +322,6 @@ export function BookingRack() {
                 <TabsTrigger value="30">30D</TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleManualSync} 
-              disabled={isSyncing}
-              className="flex items-center gap-2"
-            >
-              <RefreshCw className={cn("h-4 w-4", isSyncing && "animate-spin")} />
-              {isSyncing ? "Sinc..." : "Actualizar"}
-            </Button>
           </div>
         </CardHeader>
 
@@ -351,7 +336,7 @@ export function BookingRack() {
             <div
               className="inline-grid bg-border -m-px"
               style={{
-                gridTemplateColumns: `160px repeat(${days.length}, ${cellWidth})`,
+                gridTemplateColumns: `160px repeat(${'days.length'}, ${cellWidth})`,
               }}
             >
               {/* Header */}
@@ -387,7 +372,7 @@ export function BookingRack() {
                   {/* Day Cells for the room */}
                   {days.map((day, dayIndex) => (
                     <div
-                      key={`${room.id}-${day.toString()}`}
+                      key={`${'room.id'}-${day.toString()}`}
                       style={{
                         gridRow: roomIndex + 2,
                         gridColumn: dayIndex + 2,
@@ -453,3 +438,4 @@ export function BookingRack() {
     </>
   )
 }
+    
