@@ -38,8 +38,10 @@ const parseRoomNameForSort = (name: string) => {
         return { prefix: match[1].toLowerCase(), number: parseInt(match[2], 10) };
     }
     
-    if (name === '4') {
-        return { prefix: '', number: 100 }; // High number to push it to the end
+    // Handle special case for room '4' or others without prefix
+    const numberMatch = name.match(/^\d+$/);
+    if (numberMatch) {
+      return { prefix: 'zzz', number: parseInt(name, 10) }; // 'zzz' to sort after letter prefixes
     }
     
     return { prefix: name.toLowerCase(), number: Infinity }; 
@@ -80,26 +82,16 @@ export function BookingRack() {
     
             const aPrefixIndex = prefixOrder.indexOf(aParsed.prefix);
             const bPrefixIndex = prefixOrder.indexOf(bParsed.prefix);
-
-            // Handle cases where one or both prefixes are not in the order array
-            if (aPrefixIndex === -1 && bPrefixIndex === -1) {
-                // If both are not in the list, sort by number, then by prefix alphabetically
-                if (aParsed.number < bParsed.number) return -1;
-                if (aParsed.number > bParsed.number) return 1;
-                return aParsed.prefix.localeCompare(bParsed.prefix);
-            }
-            if (aPrefixIndex === -1) return 1; // a goes after b
-            if (bPrefixIndex === -1) return -1; // b goes after a
-
+            
             // Primary sort: by prefix order
-            if (aPrefixIndex < bPrefixIndex) return -1;
-            if (aPrefixIndex > bPrefixIndex) return 1;
+            if (aPrefixIndex !== bPrefixIndex) {
+              if (aPrefixIndex === -1) return 1; // a goes after b if its prefix is not in the order
+              if (bPrefixIndex === -1) return -1; // b goes after a if its prefix is not in the order
+              return aPrefixIndex - bPrefixIndex;
+            }
 
             // Secondary sort: by number
-            if (aParsed.number < bParsed.number) return -1;
-            if (aParsed.number > bParsed.number) return 1;
-
-            return 0;
+            return aParsed.number - bParsed.number;
           });
         setRooms(roomsFromDb)
 
@@ -302,8 +294,8 @@ export function BookingRack() {
   }
 
   const getCellWidth = (range: number) => {
-    if (range <= 1) return '300px';
-    if (range <= 7) return '100px';
+    if (range <= 1) return '400px';
+    if (range <= 7) return '120px';
     return '60px';
   };
   const cellWidth = getCellWidth(viewRange);
@@ -403,7 +395,7 @@ export function BookingRack() {
                       <div
                         key={booking.id}
                         className={cn(
-                          "z-10 m-1 flex cursor-pointer items-center overflow-hidden rounded-md border p-2 text-xs font-semibold shadow-sm transition-all hover:brightness-110",
+                          "z-10 m-1 flex cursor-pointer items-start overflow-hidden rounded-md border p-2 text-xs shadow-sm transition-all hover:brightness-110",
                           bookingStatusColors[booking.status] || "bg-gray-500"
                         )}
                         style={{
@@ -412,8 +404,20 @@ export function BookingRack() {
                         }}
                         onClick={() => handleBookingClick(booking)}
                       >
-                        <GripVertical className="h-4 w-4 mr-1 text-white/50" />
-                        <span className="truncate">{booking.guest_name}</span>
+                        <GripVertical className="h-4 w-4 mr-1 mt-1 flex-shrink-0 text-white/50" />
+                          <div className="flex flex-col truncate">
+                              <span className="font-semibold truncate">{booking.guest_name}</span>
+                              {viewRange === 1 && (
+                              <>
+                                  <span className="text-xs truncate font-normal normal-case opacity-80">
+                                      Entrada: {booking.check_in}
+                                  </span>
+                                  <span className="text-xs truncate font-normal normal-case opacity-80">
+                                      Salida: {booking.check_out}
+                                  </span>
+                              </>
+                              )}
+                          </div>
                       </div>
                     )
                   )
@@ -442,4 +446,6 @@ export function BookingRack() {
     </>
   )
 }
+    
+
     
