@@ -1,15 +1,16 @@
 const axios = require('axios');
 
-// 👉 1. PEGA AQUÍ EL TOKEN QUE COPIASTE DE FIRESTORE
+// 👉 1. PEGA AQUÍ TU TOKEN DE CLOUDBEDS (el que está en tu Firestore)
 const TOKEN = "cbat_hWPtz7TMs6yvNzThVumX3rTTfKfWjPGo"; 
 
-// 👉 2. Esta es la URL exacta de tu función en Firebase
+// 👉 2. La URL exacta de tu Función 8
 const ENDPOINT_URL = "https://us-central1-studio-4343626376-fea63.cloudfunctions.net/webhookCloudbeds";
 
-const eventos = ['dates_changed', 'status_changed', 'accommodation_changed'];
+// 🔥 Los eventos específicos para atrapar las reservas borradas y canceladas
+const eventos = ['canceled', 'deleted'];
 
 async function registrar() {
-    console.log("Iniciando registro de Webhooks en Cloudbeds...");
+    console.log("Iniciando registro de Webhooks de borrado y cancelación...");
     
     for (let action of eventos) {
         try {

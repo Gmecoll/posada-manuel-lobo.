@@ -13,6 +13,7 @@ const sharp = require('sharp');
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
 const fs = require('fs');
 const path = require('path');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // ==========================================
 // 2. INICIALIZACIÓN ÚNICA
@@ -32,6 +33,7 @@ const CLOUDBEDS_CLIENT_SECRET = defineSecret("CLOUDBEDS_CLIENT_SECRET");
 const TTLOCK_CLIENT_ID = defineSecret("TTLOCK_CLIENT_ID");
 const TTLOCK_CLIENT_SECRET = defineSecret("TTLOCK_CLIENT_SECRET");
 const REPLICATE_API_TOKEN = defineSecret("REPLICATE_API_TOKEN");
+const GOOGLE_GENAI_API_KEY = defineSecret("GOOGLE_GENAI_API_KEY");
 
 // ==========================================
 // --- FUNCIÓN 1: INICIAR PAGO SERVICIO (MERCADO PAGO) ---
@@ -222,7 +224,6 @@ exports.mantenimientoHabitaciones = onSchedule({
   }
 });
 
-
 // ==========================================
 // --- FUNCIÓN 3: IA CONSERJE ---
 // ==========================================
@@ -289,14 +290,12 @@ exports.abrirCerraduraRemote = onCall({
     const { booking_id, lockId: adminLockId } = request.data;
     const email = request.auth ? request.auth.token.email : "";
 
-    // 1. Caso Admin
     if (email === ADMIN_EMAIL && adminLockId) {
         return await llamarTTLock(adminLockId, `Admin (${email})`, "Apertura remota Admin");
     }
 
     if (!booking_id) throw new HttpsError('invalid-argument', 'Falta booking_id.');
 
-    // 2. BÚSQUEDA DIRECTA POR ID DE DOCUMENTO
     const bookingRef = db.collection('bookings').doc(String(booking_id).trim());
     const docSnap = await bookingRef.get();
 
@@ -306,8 +305,6 @@ exports.abrirCerraduraRemote = onCall({
     }
     
     const bData = docSnap.data();
-    
-    // 3. OBTENER EL LOCK ID
     let lockIdReal = bData.lockId || bData.lock_id;
 
     if (!lockIdReal) {
@@ -322,11 +319,9 @@ exports.abrirCerraduraRemote = onCall({
         throw new HttpsError('internal', 'Cerradura no vinculada a esta reserva.');
     }
 
-    // 4. LLAMAR A TTLOCK
     return await llamarTTLock(lockIdReal, bData.guest_name || "Huésped", `Apertura por huésped Hab ${bData.room_name || 'S/D'}`);
 });
 
-// HELPER TTLOCK (CON AUTO-REFRESH INTEGRADO)
 async function llamarTTLock(lockId, userIdentifier, logDescription) {
     const authRef = db.collection('configuracion_sistema').doc('ttlock_auth');
     const authDoc = await authRef.get();
@@ -343,7 +338,6 @@ async function llamarTTLock(lockId, userIdentifier, logDescription) {
         }
     });
 
-    // AUTO-RENOVACIÓN: Si el token venció (errcode 10003), lo renovamos en caliente
     if (response.data.errcode === 10003 && refreshToken) {
         console.log("Token de TTLock vencido. Intentando renovación automática...");
         try {
@@ -357,15 +351,12 @@ async function llamarTTLock(lockId, userIdentifier, logDescription) {
             
             if (refreshRes.data.access_token) {
                 accessToken = refreshRes.data.access_token;
-                // Guardamos el nuevo token
                 await authRef.update({ 
                     accessToken, 
                     refreshToken: refreshRes.data.refresh_token, 
                     updatedAt: admin.firestore.FieldValue.serverTimestamp() 
                 });
                 
-                console.log("Token renovado con éxito. Reintentando apertura...");
-                // Reintentamos la apertura original con el token nuevo
                 response = await axios.post('https://api.ttlock.com/v3/lock/unlock', null, {
                     params: {
                         clientId: process.env.TTLOCK_CLIENT_ID,
@@ -391,8 +382,9 @@ async function llamarTTLock(lockId, userIdentifier, logDescription) {
     }
     return { success: false, error: response.data.errmsg || "Error desconocido de la cerradura" };
 }
+
 // ==========================================
-// --- FUNCIÓN 6: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA + B&N (OPTIMIZADA) ---
+// --- FUNCIÓN 6: VALIDACIÓN OCR + ROTACIÓN INTELIGENTE IA ---
 // ==========================================
 exports.validarDocumentoHuesped = onObjectFinalized({
     bucket: "studio-4343626376-fea63.firebasestorage.app", 
@@ -402,11 +394,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
 }, async (event) => {
     const filePath = event.data.name;
 
-    if (event.data.metadata && event.data.metadata.ocr_processed) {
-        console.log(`File ${filePath} has already been processed. Skipping.`);
-        return null;
-    }
-    
+    if (event.data.metadata && event.data.metadata.ocr_processed) return null;
     if (!filePath.toLowerCase().includes('doc_') || filePath.toLowerCase().includes('avatar_')) return null;
 
     let folderId = filePath.split('/')[1]; 
@@ -417,7 +405,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
     const fileNameParts = fileName.split('_');
     const guestIndex = fileNameParts.length > 1 ? parseInt(fileNameParts[1]) : 1;
 
-    // 🛑 HELPER PARA RECHAZAR Y AVISAR AL FRONTEND
     const markAsInvalid = async (reason) => {
         console.log(`Documento rechazado (Reserva ${finalBookingId}, Huésped ${guestIndex}): ${reason}`);
         const bookingRef = db.collection('bookings').doc(finalBookingId);
@@ -435,7 +422,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 };
             }
             
-            // Cambiamos el estado a 'unmatch' para destrabar el Frontend
             guestsVerification[guestIndex].status = "unmatch";
             guestsVerification[guestIndex].front_uploaded = false; 
             
@@ -466,7 +452,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             features: [ { type: 'TEXT_DETECTION' }, { type: 'FACE_DETECTION' } ]
         });
         
-        // 🛑 CONTROL: SI NO HAY NINGÚN TEXTO
         if (!result.textAnnotations || result.textAnnotations.length === 0) {
             return await markAsInvalid("No se detectó ningún texto en la imagen.");
         }
@@ -482,21 +467,17 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         let extractedLastName = "";
         let formattedName = "";
 
-        // 1. ANÁLISIS MRZ (LÓGICA OPTIMIZADA)
         const unifiedText = fullText.toUpperCase().replace(/[\s\n\r]+/g, '<');
         const hasMRZ = unifiedText.includes('<<');
 
         if (hasMRZ) {
             isBack = true;
-            
-            // 1er Intento: Pasaporte
             const passportMatch = unifiedText.match(/P<[A-Z]{3}<([A-Z<]+)<<([A-Z<]+)/);
             if (passportMatch) {
                 isPassport = true;
                 extractedLastName = passportMatch[1].replace(/<+/g, ' ').trim().split(' ')[0];
                 extractedFirstName = passportMatch[2].replace(/<+/g, ' ').trim().split(' ')[0];
             } else {
-                // 2do Intento: DNI/Cédulas (Busca específicamente la línea del nombre ignorando números)
                 const nameLineMatch = unifiedText.match(/([A-Z]+<+[A-Z<]+<<[A-Z<]+)/);
 
                 if (nameLineMatch && nameLineMatch[0]) {
@@ -506,7 +487,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                         extractedFirstName = parts[1].replace(/<+/g, ' ').trim().split(' ')[0];
                     }
                 } else {
-                    // 3er Intento: Fallback de seguridad
                     const nameMatch = unifiedText.match(/<<([A-Z]+)[<A-Z]*/);
                     if (nameMatch && nameMatch[1]) {
                         extractedFirstName = nameMatch[1].replace(/<+/g, ' ').trim().split(' ')[0];
@@ -523,7 +503,6 @@ exports.validarDocumentoHuesped = onObjectFinalized({
             if (frontKeywords.some(kw => upperText.includes(kw))) {
                 isFront = true;
             } else {
-                // 🛑 CONTROL: HAY TEXTO PERO NO ES UN DOCUMENTO
                 return await markAsInvalid("La imagen contiene texto, pero no coincide con un documento de identidad válido."); 
             }
         }
@@ -654,7 +633,7 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                             avatarBufferToSave = Buffer.from(imageRes.data);
                         }
                     }
-                } catch (iaError) { console.error("Error Replicate:", iaError.message); }
+                } catch (iaError) {}
 
                 const finalBnWBuffer = await sharp(avatarBufferToSave).grayscale().jpeg({ quality: 90 }).toBuffer();
                 const avatarToken = crypto.randomUUID();
@@ -666,10 +645,9 @@ exports.validarDocumentoHuesped = onObjectFinalized({
                 });
 
                 avatarUrl = `https://firebasestorage.googleapis.com/v0/b/${event.data.bucket}/o/${encodeURIComponent(avatarPath)}?alt=media&token=${avatarToken}`;
-            } catch (cropErr) { console.error("Error extracción rostro:", cropErr); }
+            } catch (cropErr) {}
         }
 
-        // 5. ACTUALIZACIÓN FIRESTORE FINAL
         const bookingRef = db.collection('bookings').doc(finalBookingId);
         await db.runTransaction(async (transaction) => {
             const docSnap = await transaction.get(bookingRef);
@@ -758,13 +736,10 @@ exports.validarDocumentoHuesped = onObjectFinalized({
         });
 
     } catch (e) { 
-        console.error("OCR Error General:", e); 
-        // 🛑 CONTROL: SI FALLA LA IA POR CUALQUIER MOTIVO
         return await markAsInvalid("Ocurrió un error procesando la imagen. Intenta tomar una foto más clara.");
     }
     return null;
 });
-
 
 // ==========================================
 // --- FUNCIÓN 7: Cloudbeds ---
@@ -784,16 +759,12 @@ exports.testSincronizarCloudbeds = onRequest({
         const batch = db.batch();
         let count = 0;
 
-        // 1. Recorremos el array de propiedades
         dataRecibida.forEach((propiedad) => {
-            // 2. Entramos al array de 'rooms' de esa propiedad
             if (propiedad.rooms && Array.isArray(propiedad.rooms)) {
                 propiedad.rooms.forEach((room) => {
-                    
                     const roomId = `room-${room.roomID}`;
                     const roomRef = db.collection("rooms").doc(roomId);
                     
-                    // Buscamos el ID de Doorlock si existe
                     const lockField = room.customFields?.find(f => 
                         f.customFieldName.toLowerCase().includes('doorlock')
                     );
@@ -813,105 +784,108 @@ exports.testSincronizarCloudbeds = onRequest({
 
         if (count > 0) {
             await batch.commit();
-            return res.status(200).send(`
-                <div style="font-family: sans-serif; text-align: center; padding: 50px;">
-                    <h1 style="color: #4CAF50;">¡Sincronización Exitosa!</h1>
-                    <p style="font-size: 1.2em;">Se han guardado <b>${count}</b> habitaciones reales en Firestore.</p>
-                    <p>Ya puedes ver <b>es(1), es(2), do(1)...</b> en tu colección 'rooms'.</p>
-                </div>
-            `);
+            return res.status(200).send(`Sincronización Exitosa! ${count} habitaciones guardadas.`);
         } else {
-            return res.status(200).json({ mensaje: "No se encontraron habitaciones en la estructura.", data: dataRecibida });
+            return res.status(200).json({ mensaje: "No se encontraron habitaciones", data: dataRecibida });
         }
-
     } catch (error) {
         return res.status(500).json({ error: error.message });
     }
 });
 
 // ==========================================
-// --- FUNCIÓN 8: SINCRONIZAR RACK DE RESERVAS (MULTI-HABITACIÓN PRO) ---
+// --- FUNCIÓN 8: SINCRONIZAR RACK DE RESERVAS (CLAVE PERMANENTE - SÚPER ESTABLE) ---
 // ==========================================
 exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res) => {
     try {
         const reservationID = req.body.reservationID || req.body.reservationId;
+        if (!reservationID) return res.status(200).send("No ID");
         
-        if (!reservationID) {
-            console.log("Webhook recibido sin ID válido");
-            return res.status(200).send("No ID");
-        }
+        console.log(`Webhook recibido para ${reservationID}. Esperando 8s...`);
+        await new Promise(resolve => setTimeout(resolve, 8000));
 
         const db = admin.firestore();
         const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
-        const accessToken = cbAuthDoc.data().access_token.trim();
+        
+        if (!cbAuthDoc.exists || !cbAuthDoc.data().access_token) {
+            console.error("No hay token guardado en Firebase.");
+            return res.status(500).send("Sin token");
+        }
 
+        const accessToken = cbAuthDoc.data().access_token.trim();
         const axios = require('axios');
+        
+        // Vamos directo a la API con tu CLAVE PERMANENTE, sin intentar renovar nada.
         const detalleResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getReservation", {
             params: { reservationID },
-            headers: { 'Authorization': `Bearer ${accessToken}` }
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+            validateStatus: () => true 
         });
 
-        const d = detalleResponse.data.data;
-        
-        const nombreCloudbeds = d.guestName || `${d.firstName || ""} ${d.lastName || ""}`.trim();
-        const nombreFinal = nombreCloudbeds || "Huésped";
+        const apiResponse = detalleResponse.data;
 
-        // --- NUEVA LÓGICA DE SALDO Y PAGO ---
-        const saldoPendiente = parseFloat(d.balance || 0);
-        let statusPago = "completed"; // Asumimos pagado por defecto
-        
-        // Si el balance es mayor a 0 y la reserva no está cancelada/no show
-        if (saldoPendiente > 0 && d.status !== 'canceled' && d.status !== 'no_show') {
-            statusPago = "pending";
+        if (apiResponse.error || apiResponse.message === "Unauthenticated") {
+            console.error("🚨 Cloudbeds rechazó la Clave API Permanente:", JSON.stringify(apiResponse));
+            return res.status(500).send("Clave rechazada");
         }
-        // ------------------------------------
+
+        if (apiResponse.success === false) {
+            console.log(`Reserva ${reservationID} borrada en Cloudbeds.`);
+            await db.collection("bookings").doc(`booking-${reservationID}`).update({
+                status: "canceled",
+                last_sync: admin.firestore.FieldValue.serverTimestamp()
+            }).catch(() => {});
+            return res.status(200).send("OK - Reserva Borrada");
+        }
+
+        let d = apiResponse.data ? apiResponse.data : apiResponse;
+        if (Array.isArray(d)) d = d[0] || {};
+        
+        if (!d || !d.startDate) {
+            console.error("Data corrupta:", JSON.stringify(apiResponse));
+            return res.status(200).send("Data corrupta");
+        }
+
+        const nombreCloudbeds = d.guestName || `${d.firstName || ""} ${d.lastName || ""}`.trim() || "Huésped";
+        const saldoPendiente = parseFloat(d.balance || 0);
+        let statusPago = saldoPendiente > 0 && d.status !== 'canceled' && d.status !== 'no_show' ? "pending" : "completed";
 
         let totalGuests = 0;
         let roomsAssigned = [];
-        
         const allRooms = [];
-        if (d.assigned && d.assigned.length > 0) allRooms.push(...d.assigned);
-        if (d.unassigned && d.unassigned.length > 0) allRooms.push(...d.unassigned);
+        if (d.assigned && Array.isArray(d.assigned)) allRooms.push(...d.assigned);
+        if (d.unassigned && Array.isArray(d.unassigned)) allRooms.push(...d.unassigned);
 
-        // Recorremos TODAS las habitaciones asignadas
         for (const room of allRooms) {
             const adults = parseInt(room.adults) || 0;
             const children = parseInt(room.children) || 0;
-            
-            // Calculamos huéspedes por habitación (mínimo 1 por cuarto para exigir 1 foto)
             let roomGuests = adults + children;
             if (roomGuests === 0) roomGuests = 1; 
-            
             totalGuests += roomGuests;
 
             let lockId = null;
-
             if (room.roomID) {
                 try {
                     const roomDetailsResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getRooms", {
                          params: { roomID: room.roomID },
                          headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
-
                     const rData = roomDetailsResponse.data.data?.[0]?.rooms?.[0];
                     if (rData) {
-                        const lockField = rData.customFields?.find(f => f.customFieldName.toLowerCase().includes('doorlock'));
+                        const lockField = rData.customFields?.find(f => f.customFieldName?.toLowerCase().includes('doorlock'));
                         lockId = rData.doorlockID || (lockField ? lockField.customFieldValue : null);
-
                         if (lockId) {
-                            await db.collection("rooms").doc(`room-${room.roomID}`).update({ lockId: lockId });
+                            await db.collection("rooms").doc(`room-${room.roomID}`).update({ lockId: lockId }).catch(()=>{});
                         }
                     }
-                } catch(e) {
-                     console.error(`Error sincronizando Lock ID para hab ${room.roomID}: `, e.message);
-                }
+                } catch(e) {}
             }
 
             roomsAssigned.push({
                 sub_reservation_id: room.subReservationID || reservationID,
                 room_id_cloudbeds: room.roomID || null,
                 room_name: room.roomName || "No asignada",
-                lock_id: lockId,
+                lock_id: lockId || null,
                 guest_count: roomGuests 
             });
         }
@@ -920,16 +894,14 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
 
         const bookingRef = db.collection("bookings").doc(`booking-${reservationID}`);
         await bookingRef.set({
-            booking_id_cloudbeds: reservationID,
-            guest_name: nombreFinal,
+            booking_id_cloudbeds: String(reservationID),
+            guest_name: nombreCloudbeds,
             check_in: d.startDate,
             check_out: d.endDate,
-            status: d.status,
-            // NUEVOS CAMPOS A GUARDAR EN FIRESTORE
+            status: d.status || "Confirmed",
             pay_status: statusPago,
             balance: saldoPendiente,
             access_enabled: true, 
-            // ------------------------------------
             rooms: roomsAssigned, 
             room_id_cloudbeds: roomsAssigned[0]?.room_id_cloudbeds || null,
             room_name: roomsAssigned.map(r => r.room_name).join(" + ") || "No asignada",
@@ -938,7 +910,7 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
             last_sync: admin.firestore.FieldValue.serverTimestamp()
         }, { merge: true });
         
-        console.log(`✅ Webhook: Reserva ${reservationID} actualizada. Saldo: $${saldoPendiente} (${statusPago}).`);
+        console.log(`✅ Webhook: Reserva ${reservationID} guardada con éxito. Saldo: $${saldoPendiente}`);
         return res.status(200).send("OK");
 
     } catch (error) {
@@ -948,46 +920,36 @@ exports.webhookCloudbeds = onRequest({ region: "us-central1" }, async (req, res)
 });
 
 // ==========================================
-// --- FUNCIÓN DE UTILIDAD: SINCRONIZAR TODAS LAS HABITACIONES ---
+// --- FUNCIÓN 9: SINCRONIZAR TODAS LAS HABITACIONES ---
 // ==========================================
 exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => {
     try {
         const db = admin.firestore();
-        
-        // 1. Obtener credenciales de Cloudbeds
         const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
         if (!cbAuthDoc.exists) return res.status(400).send("No hay credenciales de Cloudbeds.");
         
         const accessToken = cbAuthDoc.data().access_token.trim();
         const axios = require('axios');
 
-        console.log("Iniciando sincronización masiva de habitaciones...");
-
-        // 2. Pedir TODAS las habitaciones a Cloudbeds (propertyID está implícito en el token)
         const roomsResponse = await axios.get("https://hotels.cloudbeds.com/api/v1.2/getRooms", {
             headers: { 'Authorization': `Bearer ${accessToken}` }
         });
 
         const properties = roomsResponse.data.data;
-        if (!properties || properties.length === 0) {
-             return res.status(200).send("No se encontraron propiedades.");
-        }
+        if (!properties || properties.length === 0) return res.status(200).send("No hay propiedades.");
 
         const roomsList = properties[0].rooms || [];
         let updatedCount = 0;
 
-        // 3. Procesar cada habitación y actualizar Firestore
         for (const room of roomsList) {
             const roomId = room.roomID;
             const roomName = room.roomName;
             
-            // Buscar el Custom Field del Lock ID
             const lockField = room.customFields?.find(f => f.customFieldName.toLowerCase().includes('doorlock'));
             const lockId = room.doorlockID || (lockField ? lockField.customFieldValue : null) || "";
 
             const roomRef = db.collection("rooms").doc(`room-${roomId}`);
             
-            // Guardar usando merge para no pisar el backup_code si ya existe
             await roomRef.set({
                 id: `room-${roomId}`,
                 room_id_cloudbeds: roomId,
@@ -997,106 +959,17 @@ exports.syncAllRooms = onRequest({ region: "us-central1" }, async (req, res) => 
             }, { merge: true });
 
             updatedCount++;
-            console.log(`Actualizada hab: ${roomName} (ID: ${roomId}) - Lock: ${lockId}`);
         }
 
-        return res.status(200).json({ 
-            success: true, 
-            message: `Sincronización completa. ${updatedCount} habitaciones actualizadas.`,
-            rooms_processed: updatedCount
-        });
-
+        return res.status(200).json({ success: true, message: `Sincronización completa. ${updatedCount} habs.` });
     } catch (error) {
-        console.error("❌ Error Sincronizando Habitaciones:", error.message);
         return res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// ==========================================
-// --- FUNCIÓN 9: INTEGRACIÓN PLEXO (WCF + PUERTO 4043) ---
-// ==========================================
-exports.crearPagoPlexo = onCall({
-    region: "us-central1",
-    cors: true
-}, async (request) => {
-    const data = request.data || {};
-    const bookingId = data.bookingId ? String(data.bookingId) : "TEST-001";
-    const amount = data.amount ? parseFloat(data.amount) : 1500.0;
-    
-    try {
-        const pemPath = path.join(__dirname, 'private_key.pem');
-        const privateKey = fs.readFileSync(pemPath, 'utf8');
-
-        // El fingerprint exacto de SkyRoomsTest
-        const PLEXO_FINGERPRINT = "A730BD63766B54048F8F9A2FCCB9BD42802D71ED"; 
-
-        const requestInterno = {
-            Action: 35, // 35 es crear pago
-            Amount: amount,
-            Currency: "UYU",
-            ClientInformation: {
-                Name: "Huesped de Prueba", 
-                Email: "test@skyrooms.uy",
-            },
-            MetaReference: bookingId,
-            RedirectUri: "https://skyrooms.uy/"
-        };
-
-        const objetoAFirmar = {
-            Fingerprint: PLEXO_FINGERPRINT,
-            Object: {
-                Client: "SkyRoomsTest",
-                Request: requestInterno
-            },
-            UTCUnixTimeExpiration: Math.floor((Date.now() + 300000) / 1000) // 5 minutos
-        };
-
-        const jsonCanonizado = JSON.stringify(objetoAFirmar);
-
-        const sign = crypto.createSign('SHA512');
-        sign.update(jsonCanonizado);
-        const signature = sign.sign({ 
-            key: privateKey, 
-            padding: crypto.constants.RSA_PKCS1_PADDING 
-        }, 'base64');
-
-        const payloadFinal = {
-            Object: objetoAFirmar,
-            Signature: signature
-        };
-
-        console.log("Enviando JSON a Plexo...");
-
-        // ¡EL DESCUBRIMIENTO DE GABRIEL! Agregamos el :4043 y la ruta AuthorizeJSON
-        const PLEXO_API_URL = "https://testing.plexo.com.uy:4043/SecurePaymentGateway.svc/AuthorizeJSON";
-
-        const response = await axios.post(PLEXO_API_URL, payloadFinal, {
-            headers: { 'Content-Type': 'application/json; charset=utf-8' }
-        });
-
-        console.log("Respuesta del banco:", JSON.stringify(response.data));
-
-        const resultado = response.data.AuthorizeJSONResult || response.data;
-
-        if (resultado && resultado.RedirectUrl) {
-            return { success: true, payment_url: resultado.RedirectUrl };
-        } else if (resultado && resultado.Error) {
-             throw new Error(resultado.Error);
-        } else {
-            return { success: false, error: "Estructura inesperada del banco" };
-        }
-
-    } catch (error) {
-        const status = error.response ? error.response.status : "No status";
-        const errorData = error.response && error.response.data ? JSON.stringify(error.response.data) : error.message;
-        
-        console.error(`Error HTTP ${status} en Plexo:`, errorData);
-        throw new HttpsError('internal', `Plexo rechazó la solicitud (Status: ${status}). Revisa los logs.`);
-    }
-});
 
 // ==========================================
-// --- FUNCIÓN 10: MOTOR DE UPSELLING (FIRESTORE NATIVO) ---
+// --- FUNCIÓN 10: MOTOR DE UPSELLING ---
 // ==========================================
 exports.verificarUpgrade = onCall({
     region: "us-central1",
@@ -1116,8 +989,6 @@ exports.verificarUpgrade = onCall({
 
     try {
         const db = admin.firestore();
-        
-        // 1. OBTENER RESERVA ACTUAL
         const bookingRef = db.collection("bookings").doc(`booking-${bookingId}`);
         const bookingSnap = await bookingRef.get();
         
@@ -1128,7 +999,6 @@ exports.verificarUpgrade = onCall({
             return { available: false, reason: "Reserva inactiva." };
         }
 
-        // Buscar el nombre de habitación actual (ej: "dk(2)")
         let roomNameActual = bData.room_name || "";
         if (bData.rooms && bData.rooms.length > 0 && bData.rooms[0].room_name) {
             roomNameActual = bData.rooms[0].room_name;
@@ -1144,15 +1014,12 @@ exports.verificarUpgrade = onCall({
         const myCheckIn = new Date(checkInTxt + "T00:00:00");
         const myCheckOut = new Date(checkOutTxt + "T00:00:00");
 
-        // 2. CATEGORÍA ACTUAL Y OBJETIVO
         const indexActual = jerarquia.findIndex(h => roomNameActual.includes(h.id));
         if (indexActual === -1 || indexActual === jerarquia.length - 1) {
-            return { available: false, reason: `No aplica a upgrade (Hab actual: ${roomNameActual}).` };
+            return { available: false, reason: `No aplica a upgrade.` };
         }
 
         const objetivo = jerarquia[indexActual + 1];
-
-        // 3. IDENTIFICAR LAS HABITACIONES FÍSICAS OBJETIVO
         const roomsSnap = await db.collection("rooms").get();
         const habitacionesFisicasObjetivo = [];
 
@@ -1161,77 +1028,391 @@ exports.verificarUpgrade = onCall({
             const rName = (rData.name || "").toLowerCase().trim();
             const rTypeName = (rData.type_name || "").toLowerCase().trim();
 
-            // Si es la habitación que buscamos (ej: incluye "sh" o "Suites con Hidromasaje")
             if (rName.includes(objetivo.id) || rTypeName.includes(objetivo.name.toLowerCase())) {
-                if (rName) habitacionesFisicasObjetivo.push(rName); // Guardamos "sh(1)", "sh(2)"
+                if (rName) habitacionesFisicasObjetivo.push(rName);
             }
         });
 
         if (habitacionesFisicasObjetivo.length === 0) {
-            return { available: false, reason: `No hay inventario configurado para ${objetivo.name}.` };
+            return { available: false, reason: `No hay inventario para ${objetivo.name}.` };
         }
 
-        // 4. CRUZAR CON EL RACK (Buscando choques de fechas)
         const bookingsSnap = await db.collection("bookings")
-            .where("status", "in", ["Confirmed", "confirmed", "Checked-In", "checked_in", "Bloqueada", "pending", "Pendiente"])
+            .where("status", "in", ["Confirmed", "confirmed", "Checked-In", "checked_in", "Bloqueada", "pending", "Pendiente", "Hospedado"])
             .get();
 
-        const habitacionesOcupadas = new Set();
+        const nombresOcupados = new Set();
 
         bookingsSnap.forEach(doc => {
-            if (doc.id === bookingSnap.id) return; // Ignorar la propia reserva
-
+            if (doc.id === bookingSnap.id) return;
             const res = doc.data();
             if (!res.check_in || !res.check_out) return;
 
             const resIn = new Date(res.check_in + "T00:00:00");
             const resOut = new Date(res.check_out + "T00:00:00");
 
-            if (resIn < myCheckOut && resOut > myCheckIn) { // Hay solapamiento
+            if (resIn < myCheckOut && resOut > myCheckIn) { 
                 if (res.rooms && Array.isArray(res.rooms)) {
                     res.rooms.forEach(r => {
-                        if (r.room_name) habitacionesOcupadas.add(r.room_name.toLowerCase().trim());
+                        const rn = (r.room_name || "").toLowerCase().trim();
+                        if (rn) nombresOcupados.add(rn);
                     });
                 } else if (res.room_name) {
-                    habitacionesOcupadas.add(res.room_name.toLowerCase().trim());
+                    const rn = res.room_name.toLowerCase().trim();
+                    if (rn) nombresOcupados.add(rn);
                 }
             }
         });
 
-        // 5. ¿QUEDA ALGUNA LIBRE?
-        let hayUpgradeLibre = false;
-        for (const hab of habitacionesFisicasObjetivo) {
-            if (!habitacionesOcupadas.has(hab)) {
-                hayUpgradeLibre = true;
-                break;
+       let habitacionLibre = null;
+       for (const habFisica of habitacionesFisicasObjetivo) {
+           if (!nombresOcupados.has(habFisica)) {
+               habitacionLibre = habFisica; 
+               break;
+           }
+       }
+
+       if (habitacionLibre) {
+           const hoy = new Date();
+           hoy.setHours(0, 0, 0, 0); 
+           const fechaInicioUpgrade = hoy > myCheckIn ? hoy : myCheckIn;
+           const nochesRestantes = Math.ceil((myCheckOut - fechaInicioUpgrade) / (1000 * 60 * 60 * 24));
+
+           if (nochesRestantes <= 0) return { available: false, reason: "Último día." };
+
+           const diferenciaExtra = objetivo.extra - jerarquia[indexActual].extra;
+           const precioPorHuespedDia = Math.round(diferenciaExtra / cantHuespedes);
+           const diferenciaTotal = diferenciaExtra * nochesRestantes;
+
+           return {
+               available: true,
+               offer: {
+                   newRoomName: objetivo.name,
+                   pricePerGuestDay: precioPorHuespedDia,
+                   totalDifference: diferenciaTotal,
+                   nights: nochesRestantes, 
+                   description: `Disfruta de mayor espacio y vistas exclusivas.`
+               }
+           };
+       }
+
+       return { available: false, reason: `Sin disponibilidad en Rack para ${objetivo.name}.` };
+   } catch (error) {
+       return { available: false, error: "Falla calculando Rack." };
+   }
+});
+
+// ==========================================
+// --- FUNCIÓN 11: SINCRONIZAR TARIFAS (LÓGICA CORE) ---
+// ==========================================
+async function procesarSincronizacionTarifas() {
+    const db = admin.firestore();
+    const axios = require('axios');
+
+    const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
+    if (!cbAuthDoc.exists) throw new Error("No hay credenciales.");
+    
+    const accessToken = cbAuthDoc.data().access_token.replace(/["'\s\n\r]/g, "");
+
+    const hoy = new Date().toISOString().split('T')[0];
+    const manana = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+    const response = await axios.get("https://api.cloudbeds.com/api/v1.2/getRatePlans", {
+        params: { startDate: hoy, endDate: manana },
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+
+    const dataCloudbeds = response.data.data || response.data;
+    const tarifasPorTipo = {};
+    
+    const normalizar = (str) => {
+        if (!str) return "";
+        return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    };
+    
+    const buscarTarifas = (obj) => {
+        if (Array.isArray(obj)) {
+            obj.forEach(buscarTarifas);
+        } else if (typeof obj === 'object' && obj !== null) {
+            const nombre = obj.roomTypeName || obj.roomType || obj.roomName;
+            const precio = obj.roomRate || obj.rate || obj.baseRate;
+            if (nombre && precio && typeof nombre === 'string') {
+                tarifasPorTipo[normalizar(nombre)] = parseFloat(precio);
             }
+            Object.values(obj).forEach(buscarTarifas);
         }
+    };
+    buscarTarifas(dataCloudbeds);
 
-        if (hayUpgradeLibre) {
-            const noches = Math.ceil(Math.abs(myCheckOut - myCheckIn) / (1000 * 60 * 60 * 24));
-            const diferenciaExtra = objetivo.extra - jerarquia[indexActual].extra;
-            const precioPorHuespedDia = Math.round(diferenciaExtra / cantHuespedes);
-            const diferenciaTotal = diferenciaExtra * noches;
+    if (Object.keys(tarifasPorTipo).length === 0) return { success: false };
 
-            return {
-                available: true,
-                offer: {
-                    newRoomName: objetivo.name,
-                    pricePerGuestDay: precioPorHuespedDia,
-                    totalDifference: diferenciaTotal,
-                    nights: noches,
-                    description: `Disfruta de mayor espacio, cama King Size y balcón con vistas exclusivas.`
-                }
-            };
+    const roomsSnap = await db.collection("rooms").get();
+    const batch = db.batch();
+    let count = 0;
+
+    roomsSnap.forEach(doc => {
+        const roomData = doc.data();
+        const tipoNombre = normalizar(roomData.type_name);
+        
+        if (tarifasPorTipo[tipoNombre]) {
+            batch.update(doc.ref, { 
+                current_rate: tarifasPorTipo[tipoNombre],
+                ultima_sincronizacion_tarifa: admin.firestore.FieldValue.serverTimestamp()
+            });
+            count++;
         }
+    });
 
-        return { 
-            available: false, 
-            reason: `Sin disponibilidad en Rack para ${objetivo.name}. Físicas: ${habitacionesFisicasObjetivo.length}. Ocupadas: ${habitacionesOcupadas.size}.` 
-        };
+    await batch.commit();
+    return { success: true, actualizadas: count, tarifas: tarifasPorTipo };
+}
 
+exports.syncTarifasCloudbeds = onRequest({ region: "us-central1" }, async (req, res) => {
+    try {
+        const resultado = await procesarSincronizacionTarifas();
+        if (!resultado.success) return res.status(200).send("Estructura no reconocida.");
+        return res.status(200).send(`✅ Sincronización Exitosa: ${resultado.actualizadas} habs.`);
     } catch (error) {
-        console.error(`🚨 Error en Motor Upsell Firestore:`, error.message);
-        return { available: false, error: "Falla calculando Rack." };
+        res.status(500).send("Error: " + error.message);
     }
 });
+
+exports.autoSyncTarifasCloudbeds = onSchedule({
+    schedule: "0 0,12 * * *", 
+    region: "us-central1",
+    memory: "256MiB",
+}, async (event) => {
+    try {
+        await procesarSincronizacionTarifas();
+    } catch (error) {}
+});
+
+// ==========================================
+// --- FUNCIÓN 12: WEBHOOK DE PLEXO A CLOUDBEDS ---
+// ==========================================
+exports.webhookPlexo = onRequest({ region: "us-central1" }, async (req, res) => {
+    try {
+        const data = req.body;
+        if (data.status !== "approved") return res.status(200).send("Ignorando.");
+
+        const bookingId = data.referenceId; 
+        const db = admin.firestore();
+
+        const bookingRef = db.collection("bookings").doc(bookingId);
+        const bookingSnap = await bookingRef.get();
+
+        if (!bookingSnap.exists) return res.status(404).send("No encontrada");
+
+        const bData = bookingSnap.data();
+        if (bData.status === "Confirmed") return res.status(200).send("Ya confirmada.");
+
+        const cbAuthDoc = await db.collection("integrations").doc("cloudbeds").get();
+        const accessToken = cbAuthDoc.data().access_token.trim();
+        const axios = require('axios');
+
+        const nombrePartes = (bData.guest_name || "Huésped WhatsApp").split(" ");
+        const firstName = nombrePartes[0];
+        const lastName = nombrePartes.slice(1).join(" ") || "SkyRooms";
+
+        const payloadCloudbeds = {
+            startDate: bData.check_in,
+            endDate: bData.check_out,
+            guestFirstName: firstName,
+            guestLastName: lastName,
+            guestEmail: bData.guest_email || "reservas@skyrooms.uy",
+            guestPhone: bData.guest_phone || "",
+            rooms: bData.rooms_to_book
+        };
+
+        const response = await axios.post("https://api.cloudbeds.com/api/v1.2/postReservation", payloadCloudbeds, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+
+        if (response.data.success) {
+            const cbReservationId = response.data.reservationID;
+            await bookingRef.update({
+                status: "Confirmed",
+                booking_id_cloudbeds: cbReservationId,
+                pay_status: "completed",
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            return res.status(200).send("OK");
+        } else {
+            return res.status(500).send("Error de Cloudbeds");
+        }
+    } catch (error) {
+        return res.status(500).send("Error interno");
+    }
+});
+
+// ==========================================
+// --- FUNCIÓN 13: PROCESAR PAGO DIRECTO PLEXO ---
+// ==========================================
+exports.crearPagoPlexo = onCall({ region: "us-central1", cors: true }, async (request) => {
+    const data = request.data || {};
+    const { bookingId, amount, currency, cardDetails, guestInfo, intentType, upgradeDetails } = data;
+
+    if (!cardDetails || !amount) throw new HttpsError('invalid-argument', 'Faltan datos.');
+
+    try {
+        const clientId = "1220";
+        const apiKey = "04bcf7dd12f34b258e9fb5ef0f289f0e4960581c7183402fbe63fd537eed821c";
+        const merchantId = 14304;
+        const PLEXO_API_URL = "https://api.testing.plexo.com.uy/v1/payments"; 
+        
+        const authString = Buffer.from(`${clientId}:${apiKey}`).toString('base64');
+
+        const [mesStr, anioStr] = cardDetails.expiry.split('/');
+        const expMonth = parseInt(mesStr, 10);
+        const expYear = parseInt("20" + anioStr, 10); 
+
+        const nombrePartes = cardDetails.name.trim().split(" ");
+        const firstName = nombrePartes[0] || "Usuario";
+        const lastName = nombrePartes.slice(1).join(" ") || "SkyRooms";
+
+        const payload = {
+            referenceId: `PAY-${bookingId}-${Date.now()}`,
+            invoiceNumber: `INV-${bookingId}`,
+            merchantId: merchantId,
+            
+            paymentMethod: {
+                type: "card",
+                processor: { acquirer: "mock" }, 
+                card: {
+                    number: cardDetails.number.replace(/\s/g, ''), 
+                    expMonth: expMonth,
+                    expYear: expYear,
+                    cvc: cardDetails.cvc,
+                    cardholder: {
+                        firstName: firstName,
+                        lastName: lastName,
+                        email: guestInfo?.email || "reservas@skyrooms.uy",
+                        identification: { type: 0, value: guestInfo?.documento || "11111111" }
+                    }
+                }
+            },
+            amount: {
+                currency: currency || "UYU",
+                total: parseFloat(amount),
+                details: { tax: { type: "none", amount: 0 } }
+            },
+            items: [{
+                referenceId: `RES-${bookingId}`,
+                name: intentType === 'upgrade' ? `Upgrade a ${upgradeDetails?.newRoomName}` : "Pago de Saldo",
+                quantity: 1,
+                price: parseFloat(amount)
+            }],
+            browserDetails: { ipAddress: request.rawRequest?.ip || "127.0.0.1" }
+        };
+
+        const response = await axios.post(PLEXO_API_URL, payload, {
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${authString}` }
+        });
+
+        const resultado = response.data;
+
+        if (resultado && resultado.status === "approved") {
+            const batch = db.batch();
+            const bookingRef = db.collection("bookings").doc(`booking-${bookingId}`);
+
+            if (intentType === 'upgrade' || intentType === 'combined') {
+                batch.update(bookingRef, {
+                    room_name: upgradeDetails.newRoomName,
+                    room_id_cloudbeds: upgradeDetails.newRoomId || null,
+                    pay_status: "completed", balance: 0,
+                    plexo_payment_id: resultado.id,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            } else {
+                batch.update(bookingRef, {
+                    pay_status: "completed", balance: 0,
+                    plexo_payment_id: resultado.id,
+                    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+                });
+            }
+
+            await batch.commit();
+            return { success: true, message: "Pago aprobado", data: resultado };
+        } else {
+            return { success: false, message: `El banco rechazó la operación. Estado: ${resultado.status}` };
+        }
+    } catch (error) {
+        throw new HttpsError('internal', 'Error al procesar el pago.');
+    }
+});
+
+// ==========================================
+// --- BOT DE WHATSAPP: LOBO ---
+// ==========================================
+exports.whatsappBot = onRequest({ 
+    region: "us-central1",
+    secrets: ["GOOGLE_GENAI_API_KEY"] 
+}, async (req, res) => {
+    const { GoogleGenerativeAI } = require("@google/generative-ai");
+    const axios = require('axios');
+    
+    const WA_TOKEN = "EAANYDE0FEZBcBQ5w3HxZAjOZAGr3ZAbdJRQ9ZCcePITyFHuZCUNUUufyfZCpw961IeEnUjUFwOMw0ijnDeNnvfZCZAeVfjl7UfpZADNMGRGZAODUZAdG4Wf0RFLjEtNulB7DzH6mWxjajKWu6bG1NqasW9gNpOMFWMOayuNf385RBYg6b9toJwWAA2F7to7buZAYlq4KqbAZDZD".trim(); 
+    const WA_PHONE_ID = "981817001685074".trim();
+    const VERIFY_TOKEN = "skyrooms_bot_2024";
+
+    if (req.method === "GET") {
+        if (req.query["hub.verify_token"] === VERIFY_TOKEN) return res.status(200).send(req.query["hub.challenge"]);
+        return res.sendStatus(403);
+    }
+    if (req.method !== "POST") return res.sendStatus(404);
+
+    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    if (!message || message.type !== "text") return res.status(200).send("EVENT_RECEIVED");
+
+    const from = message.from; 
+    const userMsg = message.text.body;
+
+    try {
+        const db = admin.firestore();
+        const roomsSnap = await db.collection("rooms").get();
+        let inventario = "";
+        roomsSnap.forEach(doc => {
+            const r = doc.data();
+            inventario += `- Habitación ${r.name} (${r.type_name}). Tarifa noche: $${r.current_rate || 0} UYU\n`;
+        });
+
+        const hoyStr = new Date().toISOString().split('T')[0]; 
+        const bookingsSnap = await db.collection("bookings").where("status", "in", ["Confirmed", "Checked-In", "pending"]).get();
+        let calendario = "";
+        bookingsSnap.forEach(doc => {
+            const b = doc.data();
+            if (b.check_out >= hoyStr) calendario += `- Ocupada: ${b.room_name} | Del ${b.check_in} al ${b.check_out}\n`;
+        });
+
+        const chatRef = db.collection("whatsapp_chats").doc(from);
+        const chatDoc = await chatRef.get();
+        let historial = chatDoc.exists ? chatDoc.data().mensajes.filter(m => m.role && m.parts?.[0]?.text) : [];
+
+        const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY);
+        const model = genAI.getGenerativeModel({ 
+            model: "gemini-2.5-flash",
+            systemInstruction: `Eres Lobo, recepcionista. HOY ES ${hoyStr}. Inventario:\n${inventario}\nOcupación:\n${calendario}\nSé breve y directo.`
+        }); 
+
+        const result = await model.startChat({ history: historial }).sendMessage(userMsg);
+        let respuestaIA = result.response.text().replace(/\*/g, '') || "Disculpe, ¿podría repetirlo?";
+
+        historial.push({ role: "user", parts: [{ text: userMsg }] }, { role: "model", parts: [{ text: respuestaIA }] });
+        if (historial.length > 10) historial = historial.slice(-10);
+        await chatRef.set({ mensajes: historial, ultima_interaccion: admin.firestore.FieldValue.serverTimestamp() });
+
+        await axios.post(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
+            messaging_product: "whatsapp", to: String(from), type: "text", text: { body: respuestaIA }
+        }, { headers: { 'Authorization': `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' } });
+
+    } catch (error) {}
+    return res.status(200).send("EVENT_RECEIVED");
+});
+
+// ==========================================
+// --- FUNCIÓN 14: RECIBIR Y GUARDAR TOKEN DE CLOUDBEDS ---
+// ==========================================
+exports.cloudbedsAuthCallback = onRequest({ region: "us-central1" }, async (req, res) => {
+    return res.status(200).send("Ya no se usa. Usar Clave API Permanente en Firestore.");
+});
+

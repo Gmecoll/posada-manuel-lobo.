@@ -14,6 +14,7 @@ import {
   LogOut,
   FileText,
   DoorOpen,
+  MessageSquare,
 } from "lucide-react"
 import {
   SidebarProvider,
@@ -132,6 +133,14 @@ export default function DashboardLayout({
                 <Link href="/dashboard/activity">
                   <History />
                   Actividad Reciente
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton href="/dashboard/whatsapp" asChild>
+                <Link href="/dashboard/whatsapp">
+                  <MessageSquare />
+                  WhatsApp Chats
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
