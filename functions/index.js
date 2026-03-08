@@ -1342,7 +1342,7 @@ exports.crearPagoPlexo = onCall({ region: "us-central1", cors: true }, async (re
 });
 
 // ==========================================
-// --- BOT DE WHATSAPP: LOBO ---
+// --- BOT DE WHATSAPP: LOBO (FILTRADO TOTAL DE DUPLICADOS) ---
 // ==========================================
 exports.whatsappBot = onRequest({ 
     region: "us-central1",
@@ -1361,19 +1361,72 @@ exports.whatsappBot = onRequest({
     }
     if (req.method !== "POST") return res.sendStatus(404);
 
-    const message = req.body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const value = req.body.entry?.[0]?.changes?.[0]?.value;
+    const message = value?.messages?.[0];
+    
     if (!message || message.type !== "text") return res.status(200).send("EVENT_RECEIVED");
 
     const from = message.from; 
     const userMsg = message.text.body;
+    const messageId = message.id; 
+
+    const db = admin.firestore();
 
     try {
-        const db = admin.firestore();
+        // 🛡️ CAPA 1: BLOQUEO POR ID (Frena reintentos de Meta con el mismo ID)
+        await db.collection("whatsapp_locks").doc(messageId).create({
+            from: from,
+            timestamp: admin.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (lockError) {
+        if (lockError.code === 6) return res.status(200).send("DUPLICATE_ID_IGNORED");
+    }
+
+    try {
+        const chatRef = db.collection("whatsapp_chats").doc(from);
+        
+        // 🛡️ CAPA 2: COMPARADOR Y GUARDADO INMEDIATO (Frena mensajes idénticos)
+        const resultBloqueo = await db.runTransaction(async (transaction) => {
+            const chatDoc = await transaction.get(chatRef);
+            let historial = chatDoc.exists ? chatDoc.data().mensajes || [] : [];
+            
+            if (historial.length > 0) {
+                const ultimoMsg = historial[historial.length - 1];
+                const segundos = chatDoc.data().ultima_interaccion ? (new Date() - chatDoc.data().ultima_interaccion.toDate()) / 1000 : 999;
+                
+                // Si el mensaje es igual al anterior y fue hace menos de 15 segundos, bloqueamos
+                if (ultimoMsg.role === "user" && ultimoMsg.parts[0].text === userMsg && segundos < 15) {
+                    return { duplicated: true };
+                }
+            }
+
+            // GUARDADO INMEDIATO: Registramos el mensaje del usuario ANTES de llamar a la IA
+            historial.push({ role: "user", parts: [{ text: userMsg }] });
+            if (historial.length > 10) historial = historial.slice(-10);
+            
+            transaction.set(chatRef, { 
+                mensajes: historial, 
+                ultima_interaccion: admin.firestore.FieldValue.serverTimestamp() 
+            }, { merge: true });
+
+            return { duplicated: false, historialActualizado: historial };
+        });
+
+        if (resultBloqueo.duplicated) {
+            console.log("🚫 Duplicado de contenido detectado. Cancelando.");
+            return res.status(200).send("CONTENT_DUPLICATE_IGNORED");
+        }
+
+        // ---------------------------------------------------------
+        // SI PASAMOS LOS FILTROS, LLAMAMOS A LA IA
+        // ---------------------------------------------------------
+        
+        // Cargar contexto
         const roomsSnap = await db.collection("rooms").get();
         let inventario = "";
         roomsSnap.forEach(doc => {
             const r = doc.data();
-            inventario += `- Habitación ${r.name} (${r.type_name}). Tarifa noche: $${r.current_rate || 0} UYU\n`;
+            inventario += `- Habitación ${r.name} (${r.type_name}). Tarifa: $${r.current_rate || 0} UYU\n`;
         });
 
         const hoyStr = new Date().toISOString().split('T')[0]; 
@@ -1384,31 +1437,36 @@ exports.whatsappBot = onRequest({
             if (b.check_out >= hoyStr) calendario += `- Ocupada: ${b.room_name} | Del ${b.check_in} al ${b.check_out}\n`;
         });
 
-        const chatRef = db.collection("whatsapp_chats").doc(from);
-        const chatDoc = await chatRef.get();
-        let historial = chatDoc.exists ? chatDoc.data().mensajes.filter(m => m.role && m.parts?.[0]?.text) : [];
-
         const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY);
         const model = genAI.getGenerativeModel({ 
             model: "gemini-2.5-flash",
-            systemInstruction: `Eres Lobo, recepcionista. HOY ES ${hoyStr}. Inventario:\n${inventario}\nOcupación:\n${calendario}\nSé breve y directo.`
+            systemInstruction: `Eres Lobo, recepcionista. HOY ES ${hoyStr}. Inventario:\n${inventario}\nOcupación:\n${calendario}\nSé profesional y breve.`
         }); 
 
-        const result = await model.startChat({ history: historial }).sendMessage(userMsg);
+        // Solo enviamos los mensajes anteriores (excluyendo el que acabamos de guardar para evitar que Gemini se confunda)
+        const historialParaIA = resultBloqueo.historialActualizado.slice(0, -1);
+        const result = await model.startChat({ history: historialParaIA }).sendMessage(userMsg);
         let respuestaIA = result.response.text().replace(/\*/g, '') || "Disculpe, ¿podría repetirlo?";
 
-        historial.push({ role: "user", parts: [{ text: userMsg }] }, { role: "model", parts: [{ text: respuestaIA }] });
-        if (historial.length > 10) historial = historial.slice(-10);
-        await chatRef.set({ mensajes: historial, ultima_interaccion: admin.firestore.FieldValue.serverTimestamp() });
+        // Guardar la respuesta de la IA
+        await db.runTransaction(async (t) => {
+            const doc = await t.get(chatRef);
+            let mensajes = doc.data().mensajes;
+            mensajes.push({ role: "model", parts: [{ text: respuestaIA }] });
+            t.update(chatRef, { mensajes: mensajes });
+        });
 
+        // Respuesta a WhatsApp
         await axios.post(`https://graph.facebook.com/v19.0/${WA_PHONE_ID}/messages`, {
             messaging_product: "whatsapp", to: String(from), type: "text", text: { body: respuestaIA }
         }, { headers: { 'Authorization': `Bearer ${WA_TOKEN}`, 'Content-Type': 'application/json' } });
 
-    } catch (error) {}
+    } catch (error) {
+        console.error("Error en bot:", error.message);
+    }
+    
     return res.status(200).send("EVENT_RECEIVED");
 });
-
 // ==========================================
 // --- FUNCIÓN 14: RECIBIR Y GUARDAR TOKEN DE CLOUDBEDS ---
 // ==========================================

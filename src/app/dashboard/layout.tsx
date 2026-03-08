@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useEffect } from "react"
-import { signOut } from "firebase/auth"
+import { signOut, onAuthStateChanged } from "firebase/auth"
 import { auth } from "@/firebaseConfig"
 import {
   CalendarDays,
@@ -15,6 +15,7 @@ import {
   FileText,
   DoorOpen,
   MessageSquare,
+  Loader2,
 } from "lucide-react"
 import {
   SidebarProvider,
@@ -49,11 +50,22 @@ export default function DashboardLayout({
 }) {
   const router = useRouter()
   const { toast } = useToast()
-  const [isClient, setIsClient] = useState(false)
+  const [isVerifying, setIsVerifying] = useState(true)
 
   useEffect(() => {
-    setIsClient(true)
-  }, [])
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        // User is signed in, allow access to the dashboard.
+        setIsVerifying(false)
+      } else {
+        // No user is signed in, redirect to login page.
+        router.push("/")
+      }
+    })
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe()
+  }, [router])
 
   const handleSignOut = async () => {
     try {
@@ -62,7 +74,7 @@ export default function DashboardLayout({
         title: "Sesión cerrada",
         description: "Has cerrado sesión correctamente.",
       })
-      router.push("/") // Redirect to login page
+      // onAuthStateChanged will handle the redirect
     } catch (error) {
       console.error("Error signing out:", error)
       toast({
@@ -73,11 +85,18 @@ export default function DashboardLayout({
     }
   }
 
+  if (isVerifying) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    )
+  }
+
   return (
     <SidebarProvider>
       <Sidebar>
-        <SidebarHeader>
-        </SidebarHeader>
+        <SidebarHeader></SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -156,43 +175,41 @@ export default function DashboardLayout({
           <div className="w-full flex-1">
             {/* Can add breadcrumbs or search here */}
           </div>
-          {isClient && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="secondary"
-                  size="icon"
-                  className="rounded-full"
-                >
-                  <Avatar>
-                    <Image
-                      src="https://lirp.cdn-website.com/0ec5f781/dms3rep/multi/opt/posadamanuellobo-removebg-preview-165w.png"
-                      alt="Posada Manuel Lobo Logo"
-                      width={40}
-                      height={40}
-                      className="object-contain"
-                    />
-                    <AvatarFallback>ML</AvatarFallback>
-                  </Avatar>
-                  <span className="sr-only">Toggle user menu</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>Ajustes</DropdownMenuItem>
-                <DropdownMenuItem>Soporte</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleSignOut}
-                  className="text-destructive focus:bg-destructive/10 focus:text-destructive"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Cerrar Sesión</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                className="rounded-full"
+              >
+                <Avatar>
+                  <Image
+                    src="https://lirp.cdn-website.com/0ec5f781/dms3rep/multi/opt/posadamanuellobo-removebg-preview-165w.png"
+                    alt="Posada Manuel Lobo Logo"
+                    width={40}
+                    height={40}
+                    className="object-contain"
+                  />
+                  <AvatarFallback>ML</AvatarFallback>
+                </Avatar>
+                <span className="sr-only">Toggle user menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>Ajustes</DropdownMenuItem>
+              <DropdownMenuItem>Soporte</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={handleSignOut}
+                className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Cerrar Sesión</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6">
           {children}
