@@ -61,7 +61,7 @@ export default function RoomsPage() {
           // Ocultar habitación 4
           .filter((room: any) => room.name !== "4")
           // Ensure data is sorted by room number (as numbers)
-          .sort((a, b) => getRoomNumber(a.name) - getRoomNumber(b.name)) as Room[]
+          .sort((a: any, b: any) => getRoomNumber(a.name) - getRoomNumber(b.name)) as Room[]
         setRooms(roomsFromDb)
       },
       (error) => {
