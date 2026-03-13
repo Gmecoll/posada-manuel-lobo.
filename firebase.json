@@ -15,10 +15,6 @@
     "public": "public",
     "rewrites": [
       {
-        "source": "/api/**",
-        "function": "iniciarPagoServicio"
-      },
-      {
         "source": "**",
         "run": {
           "serviceId": "posada-manuel-lobo-guest-app",
