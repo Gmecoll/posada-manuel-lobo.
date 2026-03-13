@@ -1,4 +1,3 @@
-
 "use client"
 
 import * as icons from "lucide-react"
@@ -8,12 +7,14 @@ type DynamicIconProps = {
 } & icons.LucideProps
 
 export function DynamicIcon({ name, ...props }: DynamicIconProps) {
-  const LucideIcon = icons[name]
+  const IconComponent = icons[name]
 
-  if (!LucideIcon) {
+  if (!IconComponent) {
     // Fallback icon
     return <icons.HelpCircle {...props} />
   }
 
-  return <LucideIcon {...props} />
+  // The error is caused by a name collision with the `LucideIcon` type exported
+  // from the library. Renaming the variable resolves the TypeScript error.
+  return <IconComponent {...props} />
 }
