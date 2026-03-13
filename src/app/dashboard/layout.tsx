@@ -101,7 +101,7 @@ export default function DashboardLayout({
         <SidebarContent>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard">
                   <Home />
                   Panel de Control
@@ -109,7 +109,7 @@ export default function DashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/bookings" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard/bookings">
                   <CalendarDays />
                   Reservas
@@ -117,7 +117,7 @@ export default function DashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/rooms" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard/rooms">
                   <BedDouble />
                   Gestión de Habitaciones
@@ -125,7 +125,7 @@ export default function DashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/main-door" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard/main-door">
                   <DoorOpen />
                   Puerta Principal
@@ -133,7 +133,7 @@ export default function DashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/services" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard/services">
                   <ShoppingBasket />
                   Servicios
@@ -141,7 +141,7 @@ export default function DashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/documents" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard/documents">
                   <FileText />
                   Documentos
@@ -149,7 +149,7 @@ export default function DashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/activity" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard/activity">
                   <History />
                   Actividad Reciente
@@ -157,7 +157,7 @@ export default function DashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/whatsapp" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard/whatsapp">
                   <MessageSquare />
                   WhatsApp Chats
@@ -165,7 +165,7 @@ export default function DashboardLayout({
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton href="/dashboard/consultas" asChild>
+              <SidebarMenuButton asChild>
                 <Link href="/dashboard/consultas">
                   <MessageSquareWarning />
                   Consultas
