@@ -16,6 +16,7 @@ import {
   DoorOpen,
   MessageSquare,
   Loader2,
+  MessageSquareWarning,
 } from "lucide-react"
 import {
   SidebarProvider,
@@ -160,6 +161,14 @@ export default function DashboardLayout({
                 <Link href="/dashboard/whatsapp">
                   <MessageSquare />
                   WhatsApp Chats
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton href="/dashboard/consultas" asChild>
+                <Link href="/dashboard/consultas">
+                  <MessageSquareWarning />
+                  Consultas
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
