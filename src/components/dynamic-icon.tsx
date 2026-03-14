@@ -27,5 +27,8 @@ export function DynamicIcon({ name, ...props }: DynamicIconProps) {
     return <icons.HelpCircle {...props} />
   }
 
-  return <IconComponent {...props} />
+  // To satisfy TypeScript when it can't guarantee that IconComponent is a renderable component type,
+  // we can cast it to `any` and assign it to a variable starting with a capital letter.
+  const Comp = IconComponent as any;
+  return <Comp {...props} />;
 }
