@@ -2,8 +2,21 @@
 
 import * as icons from "lucide-react"
 
+// Create a new type that excludes non-component exports from lucide-react.
+// This is a common pattern for this exact problem.
+// We exclude types and utility functions that are not components.
+type IconName = Exclude<
+  keyof typeof icons,
+  | "createLucideIcon"
+  | "LucideIcon"
+  | "LucideProps"
+  | "IconNode"
+  | "IconProps"
+  | "default"
+>
+
 type DynamicIconProps = {
-  name: keyof typeof icons
+  name: IconName // Use the new, more specific type
 } & icons.LucideProps
 
 export function DynamicIcon({ name, ...props }: DynamicIconProps) {
@@ -14,7 +27,5 @@ export function DynamicIcon({ name, ...props }: DynamicIconProps) {
     return <icons.HelpCircle {...props} />
   }
 
-  // The error was caused by a name collision with the `LucideIcon` type exported
-  // from the library. Renaming the variable resolves the TypeScript error.
   return <IconComponent {...props} />
 }
